@@ -37,11 +37,13 @@ set(CLEAN_FILES
 	${PLUGIN_FILES}
 )
 
-set_source_files_properties(
-	${CLEAN_FILES}
-	PROPERTIES
-	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
-)
+if(WERROR_COMMON_FLAGS)
+  set_source_files_properties(
+  	${CLEAN_FILES}
+  	PROPERTIES
+  	COMPILE_FLAGS "${WERROR_COMMON_FLAGS}"
+  )
+endif(WERROR_COMMON_FLAGS)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
