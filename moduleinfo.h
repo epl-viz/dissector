@@ -28,7 +28,7 @@
 #endif
 
 /* Name of package */
-#define PACKAGE "epl+xdd"
+#define PACKAGE "epl_plus_xdd"
 
 
 #ifdef VERSION

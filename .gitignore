@@ -1,0 +1,6 @@
+# autotools
+.deps/
+.libs/
+
+*.la
+*.lo

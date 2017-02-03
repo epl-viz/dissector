@@ -22,7 +22,7 @@
 include(WiresharkPlugin)
 
 # Plugin name and version info (major minor micro extra)
-set_module_info(epl+xdd 0 0 1 0)
+set_module_info(epl_plus_xdd 0 0 1 0)
 
 set(DISSECTOR_SRC
 	packet-epl.c
@@ -52,9 +52,9 @@ register_dissector_files(plugin.c
 	${DISSECTOR_SRC}
 )
 
-add_plugin_library(epl+xdd)
+add_plugin_library(epl_plus_xdd)
 
-install(TARGETS epl+xdd
+install(TARGETS epl_plus_xdd
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION} NAMELINK_SKIP
 	RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION}
 	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION}
@@ -63,7 +63,7 @@ install(TARGETS epl+xdd
 file(GLOB DISSECTOR_HEADERS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "*.h")
 CHECKAPI(
 	NAME
-	  epl+xdd
+	  epl_plus_xdd
 	SWITCHES
 	  -g abort -g termoutput -build
 	SOURCES

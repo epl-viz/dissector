@@ -22,7 +22,7 @@ include $(top_srcdir)/Makefile.am.inc
 include ../Makefile.am.inc
 
 # the name of the plugin
-PLUGIN_NAME = epl+xdd
+PLUGIN_NAME = epl_plus_xdd
 
 # Non-generated sources to be scanned for registration routines
 NONGENERATED_REGISTER_C_FILES = \
@@ -39,22 +39,22 @@ CLEAN_HEADER_FILES = \
 HEADER_FILES = \
 	$(CLEAN_HEADER_FILES)
 
-plugin_LTLIBRARIES = epl+xdd.la
+plugin_LTLIBRARIES = epl_plus_xdd.la
 
-epl_la_SOURCES = \
+epl_plus_xdd_la_SOURCES = \
 	plugin.c \
 	moduleinfo.h \
 	$(SRC_FILES)	\
 	$(HEADER_FILES)
 
-epl_la_CPPFLAGS = $(AM_CPPFLAGS) $(PLUGIN_CPPFLAGS)
+epl_plus_xdd_la_CPPFLAGS = $(AM_CPPFLAGS) $(PLUGIN_CPPFLAGS)
 
-epl_la_CFLAGS = $(AM_CFLAGS) $(PLUGIN_CFLAGS)
+epl_plus_xdd_la_CFLAGS = $(AM_CFLAGS) $(PLUGIN_CFLAGS)
 
-epl_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+epl_plus_xdd_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 
 CLEANFILES = \
-	epl+xdd \
+	epl_plus_xdd \
 	*~
 
 MAINTAINERCLEANFILES = \
