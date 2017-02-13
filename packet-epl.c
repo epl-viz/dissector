@@ -3911,12 +3911,14 @@ proto_register_epl(void)
 			{ "PResTimeFirstValid", "epl-xdd.soa.prft",
 				FT_BOOLEAN, 8, NULL, EPL_SOA_SYNC_PRES_FIRST, NULL, HFILL }
 		},
+		// XXX: Darf er das?
 		{ &hf_epl_soa_pre_set ,
-			{ "PResModeSet", "epl-xdd.soa.prsc",
+			{ "PResModeSet", "epl-xdd.soa.prmst",
 				FT_BOOLEAN, 8, NULL, EPL_SOA_SYNC_PRES_SET, NULL, HFILL }
 		},
+		// XXX: Darf er das?
 		{ &hf_epl_soa_pre_res,
-			{ "PResModeReset", "epl-xdd.soa.prft",
+			{ "PResModeReset", "epl-xdd.soa.prmrst",
 				FT_BOOLEAN, 8, NULL, EPL_SOA_SYNC_PRES_RESET, NULL, HFILL }
 		},
 		{ &hf_epl_soa_mac_end,
@@ -4215,8 +4217,9 @@ proto_register_epl(void)
 			{ "SyncDelayStation", "epl-xdd.asnd.syncresponse.delay.station",
 				FT_UINT8, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
+		// XXX check if change here was correct
 		{ &hf_epl_asnd_syncResponse_delay,
-			{ "SyncDelay", "epl-xdd.asnd.syncresponse.delay.station",
+			{ "SyncDelay", "epl-xdd.asnd.syncresponse.delay",
 				FT_UINT8, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_asnd_syncResponse_pre_fst,
