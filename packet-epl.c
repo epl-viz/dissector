@@ -1248,6 +1248,7 @@ static const gchar* decode_epl_address(guchar adr);
 /* Initialize the protocol and registered fields */
 static gint proto_epl            = -1;
 
+// FIXME: remove these, when no longer needed for debugging
 static gint hf_epl_convo         = -1;
 
 static gint hf_epl_mtyp          = -1;
@@ -1471,6 +1472,35 @@ static gint hf_epl_fragment_count                            = -1;
 static gint hf_epl_reassembled_in                            = -1;
 static gint hf_epl_reassembled_length                        = -1;
 static gint hf_epl_reassembled_data                          = -1;
+
+/* EPL Data Types */
+static gint hf_epl_pdo_boolean	       = -1;
+static gint hf_epl_pdo_integer8        = -1;
+static gint hf_epl_pdo_integer16       = -1;
+static gint hf_epl_pdo_integer32       = -1;
+static gint hf_epl_pdo_unsigned8       = -1;
+static gint hf_epl_pdo_unsigned16      = -1;
+static gint hf_epl_pdo_unsigned32      = -1;
+static gint hf_epl_pdo_real32          = -1;
+static gint hf_epl_pdo_visible_string  = -1;
+static gint hf_epl_pdo_octet_string    = -1;
+static gint hf_epl_pdo_unicode_string  = -1;
+static gint hf_epl_pdo_time_of_day     = -1;
+static gint hf_epl_pdo_time_difference = -1;
+
+static gint hf_epl_pdo_domain     = -1;
+static gint hf_epl_pdo_integer24  = -1;
+static gint hf_epl_pdo_real64     = -1;
+static gint hf_epl_pdo_integer40  = -1;
+static gint hf_epl_pdo_integer48  = -1;
+static gint hf_epl_pdo_integer56  = -1;
+static gint hf_epl_pdo_integer64  = -1;
+static gint hf_epl_pdo_unsigned24 = -1;
+static gint hf_epl_pdo_unsigned40 = -1;
+static gint hf_epl_pdo_unsigned48 = -1;
+static gint hf_epl_pdo_unsigned56 = -1;
+static gint hf_epl_pdo_unsigned64 = -1;
+
 
 static gint ett_epl_fragment                                 = -1;
 static gint ett_epl_fragments                                = -1;
@@ -4557,6 +4587,109 @@ proto_register_epl(void)
 		{ &hf_epl_reassembled_data,
 			{ "Reassembled Data", "epl-xdd.asnd.sdo.cmd.reassembled.data",
 				FT_BYTES, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+
+		/* EPL Data types */
+		{ &hf_epl_pdo_boolean,
+			{ "Data", "epl-xdd.pdo.boolean",
+				FT_BOOLEAN, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_integer8,
+			{ "Data", "epl-xdd.pdo.integer8",
+				FT_INT8, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_integer16,
+			{ "Data", "epl-xdd.pdo.integer16",
+				FT_INT16, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_integer32,
+			{ "Data", "epl-xdd.pdo.integer32",
+				FT_INT32, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_unsigned8,
+			{ "Data", "epl-xdd.pdo.unsigned8",
+				FT_UINT8, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_unsigned16,
+			{ "Data", "epl-xdd.pdo.unsigned16",
+				FT_UINT16, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_unsigned32,
+			{ "Data", "epl-xdd.pdo.unsigned32",
+				FT_UINT32, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_real32,
+			{ "Data", "epl-xdd.pdo.real32",
+				FT_FLOAT, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_visible_string,
+			{ "Data", "epl-xdd.pdo.string",
+				FT_STRING, STR_ASCII, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_octet_string,
+			{ "Data", "epl-xdd.pdo.string",
+				FT_BYTES, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_unicode_string,
+			{ "Data", "epl-xdd.pdo.string",
+				FT_STRING, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_time_of_day, /* not 1:1 */
+			{ "Data", "epl-xdd.pdo.time_of_day",
+				FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_time_difference, /* not 1:1 */
+			{ "Data", "epl-xdd.pdo.time_difference",
+				FT_RELATIVE_TIME, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+
+		{ &hf_epl_pdo_domain,
+			{ "Data", "epl-xdd.pdo.domain",
+				FT_BYTES, BASE_ALLOW_ZERO, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_integer24,
+			{ "Data", "epl-xdd.pdo.integer24",
+				FT_INT24, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_real64,
+			{ "Data", "epl-xdd.pdo.real64",
+				FT_DOUBLE, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_integer40,
+			{ "Data", "epl-xdd.pdo.integer40",
+				FT_INT40, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_integer48,
+			{ "Data", "epl-xdd.pdo.integer48",
+				FT_INT48, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_integer56,
+			{ "Data", "epl-xdd.pdo.integer56",
+				FT_INT56, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_integer64,
+			{ "Data", "epl-xdd.pdo.integer64",
+				FT_INT64, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_unsigned24,
+			{ "Data", "epl-xdd.pdo.unsigned24",
+				FT_UINT24, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_unsigned40,
+			{ "Data", "epl-xdd.pdo.unsigned40",
+				FT_UINT40, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_unsigned48,
+			{ "Data", "epl-xdd.pdo.unsigned48",
+				FT_UINT48, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_unsigned56,
+			{ "Data", "epl-xdd.pdo.unsigned56",
+				FT_UINT56, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_unsigned64,
+			{ "Data", "epl-xdd.pdo.unsigned64",
+				FT_UINT64, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 	};
 
