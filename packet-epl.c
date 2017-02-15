@@ -55,6 +55,7 @@
 
 #include "config.h"
 
+#include <epan/conversation.h>
 #include <epan/packet.h>
 #include <epan/etypes.h>
 #include <epan/prefs.h>
@@ -1220,11 +1221,13 @@ static value_string_ext epl_sdo_asnd_commands_short_ext = VALUE_STRING_EXT_INIT(
 static const gchar* addr_str_cn  = " (Controlled Node)";
 static const gchar* addr_str_res = " (reserved)";
 
-static gint dissect_epl_payload ( proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, gint len, guint8 msgType );
+struct epl_convo;
+
+static gint dissect_epl_payload_fallback(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, gint len, guint8 msgType );
 
 static gint dissect_epl_soc(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
-static gint dissect_epl_preq(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
-static gint dissect_epl_pres(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
+static gint dissect_epl_preq(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
+static gint dissect_epl_pres(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
 static gint dissect_epl_soa(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
 
 static gint dissect_epl_asnd_ires(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
@@ -1232,16 +1235,16 @@ static gint dissect_epl_asnd_sres(proto_tree *epl_tree, tvbuff_t *tvb, packet_in
 static gint dissect_epl_asnd_nmtcmd(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_asnd_nmtreq(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_asnd_nmtdna(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
-static gint dissect_epl_asnd(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
-static gint dissect_epl_ainv(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
+static gint dissect_epl_asnd(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
+static gint dissect_epl_ainv(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
 
-static gint dissect_epl_asnd_sdo(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
+static gint dissect_epl_asnd_sdo(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_asnd_resp(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_sdo_sequence(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
-static gint dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
-static gint dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size);
-static gint dissect_epl_sdo_command_write_multiple_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size);
-static gint dissect_epl_sdo_command_read_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size);
+static gint dissect_epl_sdo_command(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
+static gint dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size);
+static gint dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size);
+static gint dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size);
 
 static const gchar* decode_epl_address(guchar adr);
 
@@ -1250,6 +1253,7 @@ static gint proto_epl            = -1;
 
 // FIXME: remove these, when no longer needed for debugging
 static gint hf_epl_convo         = -1;
+static gint hf_epl_info         = -1;
 
 static gint hf_epl_mtyp          = -1;
 static gint hf_epl_node          = -1;
@@ -1579,38 +1583,108 @@ static reassembly_table epl_reassembly_table;
 #define EPL_DIAGNOSTIC_DEVICE_NODEID            253
 #define EPL_TO_LEGACY_ETHERNET_ROUTER_NODEID    254
 #define EPL_BROADCAST_NODEID                    255
-static gboolean is_cn(guint8 cn_addr) {
-    switch(cn_addr) {
-	    case EPL_DYNAMIC_NODEID:
-	    case EPL_MN_NODEID:
-	    case EPL_DIAGNOSTIC_DEVICE_NODEID:
-	    case EPL_TO_LEGACY_ETHERNET_ROUTER_NODEID:
-	    case EPL_BROADCAST_NODEID:
-		    return FALSE;
-    }
-    return TRUE;
 }
 static address convo_mac;
 static conversation_t *find_or_create_conversation_epl(packet_info *pinfo, guint8 cn_addr) {
 	conversation_t *convo;
 
 	/* I2C port is also single octet wide */
-	if ((convo = find_conversation(pinfo->num, &convo_mac, NULL, PT_I2C,
-					cn_port, 0, NO_ADDR2|NO_PORT2))) {
+	if ((convo = find_conversation(pinfo->num, &convo_mac, &convo_mac, PT_I2C,
+					cn_addr, cn_addr, NO_ADDR_B|NO_PORT_B))) {
+		//TODO: use conversation template?
 
-		if (pinfo->num > conv->last_frame) {
-			conv->last_frame = pinfo->num;
+		if (pinfo->num > convo->last_frame) {
+			convo->last_frame = pinfo->num;
 		}
 	} else {
-		convo = conversation_new(pinfo->num, &convo_mac, NULL, PT_I2C,
-				cn_port, 0, NO_ADDR1|NO_ADDR2|NO_PORT2);
+		convo = conversation_new(pinfo->num, &convo_mac, &convo_mac, PT_I2C,
+				cn_addr, cn_addr, NO_ADDR2|NO_PORT2);
 	}
 
 	return convo;
 }
+struct object_mapping {
+	struct {
+		guint16 index;
+		guint8 subindex;
+	} param;
+	/* in bits */
+	int offset;
+	int len;
+	/* info */
+	const char *name;
+};
+static struct object_mapping *get_object_mappings(wmem_array_t *arr, guint *len) {
+	*len = wmem_array_get_count(arr);
+	return wmem_array_get_raw(arr);
+}
+int object_mapping_cmp (const void *a_, const void *b_) {
+	const struct object_mapping *a = a_, *b = b_;
+
+	if (a->offset < b->offset) return -1;
+	if (a->offset > b->offset) return +1;
+	return 0;
+}
+static guint add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping) {
+	/* A bit ineffecient (looping backwards would be better), but it's acyclic anyway */
+	guint len;
+	struct object_mapping *mappings = get_object_mappings(arr, &len);
+	for (guint i = 0; i < len; i++) {
+		if (mappings[i].param.index == mapping->param.index 
+		&&  mappings[i].param.subindex == mapping->param.subindex) {
+			mappings[i] = *mapping;
+			return len;
+		}
+	}
+
+	wmem_array_append(arr, mapping, 1);
+	wmem_array_sort(arr, object_mapping_cmp);
+	return len + 1;
+}
 struct epl_convo {
 	guint8 cn;
+	wmem_array_t *TPDO; /* CN->MN */
+	wmem_array_t *RPDO; /* MN->CN */
 };
+
+static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint offset, guint len, guint8 msgType)
+{
+	// FIXME: non 8-bit-multiple-data!!!
+	wmem_array_t *mapping = msgType == EPL_PRES ? convo->TPDO : convo->RPDO;
+	tvbuff_t *payload_tvb;
+	guint rem_len;
+	guint maps_count;
+	guint off = 0;
+
+	// TODO: what if some are set via SDO and some are set via XDC
+	struct object_mapping *mappings = get_object_mappings(mapping, &maps_count);
+
+	rem_len = tvb_captured_length_remaining(tvb, offset);
+	payload_tvb = tvb_new_subset_length(tvb, offset, len > rem_len ? rem_len : len);
+
+	for (guint i = 0; i < maps_count; i++) {
+		guint willbe_offset_bits = mappings[i].offset + mappings[i].len;
+		proto_tree *ti;
+		if (willbe_offset_bits > rem_len * 8) {
+			break;
+		}
+
+		ti = proto_tree_add_string(epl_tree, hf_epl_info, payload_tvb, offset, 0, mappings[i].name);
+		PROTO_ITEM_SET_GENERATED(ti);
+
+		dissect_epl_payload_fallback(epl_tree, payload_tvb, pinfo, mappings[i].offset / 8, mappings[i].len / 8, msgType);
+
+		off = willbe_offset_bits / 8;
+	}
+
+	/* If we don't have enough information, resport to data dissector */
+	rem_len = tvb_captured_length_remaining(payload_tvb, off);
+	if (rem_len) {
+		return dissect_epl_payload_fallback(epl_tree, payload_tvb, pinfo, off, rem_len, msgType);
+	}
+	return offset + len;
+}
+
 static struct epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 {
 	struct epl_convo *convo;
@@ -1621,7 +1695,9 @@ static struct epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 	if (convo == NULL)
 	{
 		convo = wmem_new(wmem_file_scope(), struct epl_convo);
-		epl->cn = cn_port;
+		convo->cn = cn_addr;
+		convo->TPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
+		convo->RPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
 
 		conversation_add_proto_data(epan_conversation, proto_epl, (void *)convo);
 	}
@@ -1756,7 +1832,7 @@ setup_dissector(void)
 	/* init duplication hash table */
 	epl_duplication_table = g_hash_table_new(epl_duplication_hash, epl_duplication_equal);
 
-	/* create memory block for uploda/download */
+	/* create memory block for upload/download */
 	memset(&epl_asnd_sdo_reassembly_write, 0, sizeof(epl_sdo_reassembly));
 	memset(&epl_asnd_sdo_reassembly_read, 0, sizeof(epl_sdo_reassembly));
 	/* create reassembly table */
@@ -1769,6 +1845,7 @@ static void
 cleanup_dissector(void)
 {
 	reassembly_table_destroy(&epl_reassembly_table);
+	/*g_hash_free(epl_duplication_table);*/
 	count = 0;
 	ct = 0;
 	first_read = TRUE;
@@ -1981,7 +2058,7 @@ dissect_eplpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean udp
 			break;
 
 		case EPL_AINV:
-			offset = dissect_epl_ainv(epl_tree, tvb, pinfo, epl_src, offset);
+			offset = dissect_epl_ainv(convo, epl_tree, tvb, pinfo, epl_src, offset);
 			break;
 
 		case EPL_AMNI:
@@ -1989,11 +2066,11 @@ dissect_eplpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean udp
 			 * there's nothing to dissect! Everything is given to the heuristic,
 			 * which will dissect as data, if no heuristic dissector uses it. */
 			size = tvb_captured_length_remaining(tvb, offset);
-			offset = dissect_epl_payload(epl_tree, tvb, pinfo, offset, size, EPL_AMNI);
+			offset = dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_AMNI);
 			break;
 
-		default:
-			/* Does not occur as it is caught by an earlier switch statement */
+               /* Default case can not happen as it is caught by an earlier switch
+                       *                       statement */
 	}
 
 
@@ -2038,7 +2115,7 @@ decode_epl_address (guchar adr)
 }
 
 static gint
-dissect_epl_payload ( proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, gint len, guint8 msgType )
+dissect_epl_payload_fallback(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, gint len, guint8 msgType)
 {
 	gint off = 0, rem_len = 0, pld_rem_len = 0;
 	tvbuff_t * payload_tvb = NULL;
@@ -2118,7 +2195,7 @@ dissect_epl_preq(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 	};
 	proto_item *ti;
 
-	ti = proto_tree_add_item(epl_tree, hf_epl_convo, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+	ti = proto_tree_add_uint(epl_tree, hf_epl_convo, tvb, offset, 1, convo->cn);
         PROTO_ITEM_SET_GENERATED(ti);
 
 
@@ -2140,7 +2217,7 @@ dissect_epl_preq(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 			(EPL_PDO_RD_MASK & flags), hi_nibble(pdoversion), lo_nibble(pdoversion));
 
 	offset += 2;
-	offset += dissect_epl_payload(epl_tree, tvb, pinfo, offset, len, EPL_PREQ );
+	offset += dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, len, EPL_PREQ );
 
 	return offset;
 }
@@ -2207,7 +2284,7 @@ dissect_epl_pres(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 
 
 	offset += 2;
-	offset += dissect_epl_payload ( epl_tree, tvb, pinfo, offset, len, EPL_PRES );
+	offset += call_pdo_payload_dissector(convo, epl_tree, tvb, pinfo, offset, len, EPL_PRES );
 
 	return offset;
 }
@@ -2366,7 +2443,7 @@ dissect_epl_asnd(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 
 		case EPL_ASND_SDO:
 			subtree = proto_item_add_subtree ( item, ett_epl_sdo );
-			offset = dissect_epl_asnd_sdo(subtree, tvb, pinfo, offset);
+			offset = dissect_epl_asnd_sdo(convo, subtree, tvb, pinfo, offset);
 			break;
 		case EPL_ASND_SYNCRESPONSE:
 			offset = dissect_epl_asnd_resp(epl_tree, tvb, pinfo, offset);
@@ -2381,9 +2458,9 @@ dissect_epl_asnd(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 			{
 				if (! dissector_try_uint(epl_asnd_dissector_table, svid, next_tvb, pinfo,
 						( epl_tree != NULL ? epl_tree->parent : epl_tree ) ) )
-					dissect_epl_payload ( epl_tree, tvb, pinfo, offset, size, EPL_ASND );
+					dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_ASND );
 			} else {
-				dissect_epl_payload ( epl_tree, tvb, pinfo, offset, size, EPL_ASND );
+				dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_ASND );
 			}
 			break;
 	}
@@ -2392,7 +2469,7 @@ dissect_epl_asnd(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 }
 
 gint
-dissect_epl_ainv(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset)
+dissect_epl_ainv(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset)
 {
 	guint8 svid;
 	proto_item *item;
@@ -2446,7 +2523,7 @@ dissect_epl_ainv(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8
 
 		case EPL_ASND_SDO:
 			subtree = proto_item_add_subtree ( item, ett_epl_sdo );
-			offset = dissect_epl_asnd_sdo(subtree, tvb, pinfo, offset);
+			offset = dissect_epl_asnd_sdo(convo, subtree, tvb, pinfo, offset);
 			break;
 	}
 
@@ -2847,7 +2924,7 @@ dissect_epl_asnd_sres(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, g
 }
 
 gint
-dissect_epl_asnd_sdo(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset)
+dissect_epl_asnd_sdo(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset)
 {
 	guint16 seqnum = 0x00;
 	offset = dissect_epl_sdo_sequence(epl_tree, tvb, pinfo, offset);
@@ -2859,7 +2936,7 @@ dissect_epl_asnd_sdo(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gi
 	{
 		if (tvb_reported_length_remaining(tvb, offset) > 0)
 		{
-			offset = dissect_epl_sdo_command(epl_tree, tvb, pinfo, offset);
+			offset = dissect_epl_sdo_command(convo, epl_tree, tvb, pinfo, offset);
 		}
 		else col_append_str(pinfo->cinfo, COL_INFO, "Empty CommandLayer");
 	}
@@ -3012,7 +3089,7 @@ dissect_epl_sdo_sequence(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo
 }
 
 gint
-dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset)
+dissect_epl_sdo_command(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset)
 {
 	gint    payload_length;
 	guint8  segmented, command_id, transaction_id;
@@ -3150,15 +3227,15 @@ dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 			switch (command_id)
 			{
 			case EPL_ASND_SDO_COMMAND_WRITE_BY_INDEX:
-				offset = dissect_epl_sdo_command_write_by_index(sdo_cmd_tree, tvb, pinfo, offset, segmented, response, segment_size);
+				offset = dissect_epl_sdo_command_write_by_index(convo, sdo_cmd_tree, tvb, pinfo, offset, segmented, response, segment_size);
 				break;
 
 			case EPL_ASND_SDO_COMMAND_WRITE_MULTIPLE_PARAMETER_BY_INDEX:
-				offset = dissect_epl_sdo_command_write_multiple_by_index(sdo_cmd_tree, tvb, pinfo, offset, segmented, response, segment_size);
+				offset = dissect_epl_sdo_command_write_multiple_by_index(convo, sdo_cmd_tree, tvb, pinfo, offset, segmented, response, segment_size);
 				break;
 
 			case EPL_ASND_SDO_COMMAND_READ_BY_INDEX:
-				offset = dissect_epl_sdo_command_read_by_index(sdo_cmd_tree, tvb, pinfo, offset, segmented, response, segment_size);
+				offset = dissect_epl_sdo_command_read_by_index(convo, sdo_cmd_tree, tvb, pinfo, offset, segmented, response, segment_size);
 				break;
 
 			default:
@@ -3170,7 +3247,7 @@ dissect_epl_sdo_command(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 }
 
 gint
-dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
+dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
 	gint size, payload_length = 0;
 	guint16 idx = 0x00, nosub = 0x00, sod_index = 0x00, error = 0xFF, entries = 0x00, sub_val = 0x00;
@@ -3258,6 +3335,7 @@ dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, pack
 			   (idx == EPL_SOD_RESTORE_PARAM && subindex <= 0x7F && subindex >= 0x04))
 			{
 				psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, offset, 1, ENC_LITTLE_ENDIAN);
+
 				proto_item_append_text(psf_item, " (ManufacturerParam_%02Xh_U32)", subindex);
 				col_append_fstr(pinfo->cinfo, COL_INFO, "/ManufacturerParam_%02Xh_U32)", subindex);
 			}
@@ -3377,26 +3455,45 @@ dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, pack
 		size = tvb_reported_length_remaining(tvb, offset);
 
 		/* if the frame is a PDO Mapping and the subindex is bigger than 0x00 */
-		if((idx == EPL_SOD_PDO_TX_MAPP && subindex > entries) ||(idx == EPL_SOD_PDO_RX_MAPP && subindex > entries))
+		if((idx == EPL_SOD_PDO_TX_MAPP && subindex > entries) || (idx == EPL_SOD_PDO_RX_MAPP && subindex > entries))
 		{
-			// XXX add this to GHashtable
+			struct object_mapping map;
+			wmem_strbuf_t *name;
+			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
+			name = wmem_strbuf_new(wmem_file_scope(), NULL);
+			map.param.index = idx;
+			map.param.subindex = subindex;
+
 			psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_mapping, tvb, offset, 1, ENC_NA);
 			psf_tree = proto_item_add_subtree(psf_item, ett_epl_asnd_sdo_cmd_data_mapping);
+
 			idx = tvb_get_letohs(tvb, offset);
 			proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, offset, 2, idx,"Index: 0x%04X", idx);
+			//TODO: remove 
+			wmem_strbuf_append_printf(name, "%04X.", idx);
 			offset += 2;
+
 			idx = tvb_get_letohs(tvb, offset);
 			proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, offset, 1, idx,"SubIndex: 0x%02X", idx);
+			wmem_strbuf_append_printf(name, "%04X", idx);
 			offset += 2;
-			idx = tvb_get_letohs(tvb, offset);
+
+			map.offset = idx = tvb_get_letohs(tvb, offset);
 			proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_offset, tvb, offset, 2, idx,"Offset: 0x%04X", idx);
 			offset += 2;
+
+			map.len = tvb_get_guint8(tvb, offset);
 			proto_tree_add_item(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_length, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 			offset += 2;
+
+
+			map.name = wmem_strbuf_finalize(name);
+
+			add_object_mapping(mappings, &map);
 		}
 		else
 		{
-			offset += dissect_epl_payload ( epl_tree, tvb, pinfo, offset, size, EPL_ASND );
+			offset += dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_ASND );
 		}
 	}
 	else
@@ -3408,7 +3505,7 @@ dissect_epl_sdo_command_write_by_index(proto_tree *epl_tree, tvbuff_t *tvb, pack
 }
 
 gint
-dissect_epl_sdo_command_write_multiple_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
+dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
 	gint dataoffset;
 	guint8 subindex = 0x00,  padding = 0x00;
@@ -3627,7 +3724,7 @@ dissect_epl_sdo_command_write_multiple_by_index(proto_tree *epl_tree, tvbuff_t *
 			else
 			{
 				/* dissect the payload */
-				dissect_epl_payload ( psf_od_tree, tvb, pinfo, dataoffset, size, EPL_ASND);
+				dissect_epl_payload_fallback(psf_od_tree, tvb, pinfo, dataoffset, size, EPL_ASND);
 			}
 
 			offset += datalength;
@@ -3647,7 +3744,7 @@ dissect_epl_sdo_command_write_multiple_by_index(proto_tree *epl_tree, tvbuff_t *
 }
 
 gint
-dissect_epl_sdo_command_read_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
+dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
 	gint size, payload_length;
 	guint16 idx = 0x00;
@@ -3753,7 +3850,7 @@ dissect_epl_sdo_command_read_by_index(proto_tree *epl_tree, tvbuff_t *tvb, packe
 		col_append_str(pinfo->cinfo, COL_INFO, "Response");
 
 		size = tvb_reported_length_remaining(tvb, offset);
-		offset = dissect_epl_payload ( epl_tree, tvb, pinfo, offset, size, EPL_ASND );
+		offset = dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_ASND );
 	}
 
 	return offset;
