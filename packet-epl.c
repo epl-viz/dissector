@@ -62,6 +62,9 @@
 #include <epan/expert.h>
 #include <epan/reassemble.h>
 #include <epan/proto_data.h>
+#include <glib.h>
+// TODO: remove this 
+#include <stdio.h>
 
 void proto_register_epl(void);
 void proto_reg_handoff_epl(void);
@@ -1583,8 +1586,52 @@ static reassembly_table epl_reassembly_table;
 #define EPL_DIAGNOSTIC_DEVICE_NODEID            253
 #define EPL_TO_LEGACY_ETHERNET_ROUTER_NODEID    254
 #define EPL_BROADCAST_NODEID                    255
+
+static GHashTable *epl_profiles;
+static wmem_array_t *CN_base_profiles, *MN_base_profiles;
+
+struct profile {
+	guint16 id;
+	GHashTable *objects;
+};
+
+struct subobject {
+	range_string *range;
+	const char *name;
+};
+struct object {
+    guint16 index;
+    const char *name;
+    GArray *subindices;
+};
+
+static struct profile *profile_new(guint16 id) {
+	struct profile *profile = g_new0(struct profile, 1);
+
+	profile->id = id;
+	profile->objects = g_hash_table_new(g_int_hash, g_int_equal);
+
+	g_hash_table_insert(epl_profiles, &profile->id, profile);
+	return profile;
 }
+static struct object *profile_object_add(struct profile *profile, guint16 index) {
+	struct object *object = g_new0(struct object, 1);
+
+	object->index = index;
+
+	g_hash_table_insert(profile->objects, &object->index, object);
+	return object;
+}
+static void install_default_profiles(void) {
+	struct profile *epsg401 = profile_new(401);
+	struct object *object = profile_object_add(epsg401, 0x1011);
+	wmem_array_append_one(CN_base_profiles, epsg401);
+
+	object->name = "Aly Baba";
+}
+
 static address convo_mac;
+
 static conversation_t *find_or_create_conversation_epl(packet_info *pinfo, guint8 cn_addr) {
 	conversation_t *convo;
 
@@ -1627,9 +1674,9 @@ int object_mapping_cmp (const void *a_, const void *b_) {
 }
 static guint add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping) {
 	/* A bit ineffecient (looping backwards would be better), but it's acyclic anyway */
-	guint len;
+	guint i, len;
 	struct object_mapping *mappings = get_object_mappings(arr, &len);
-	for (guint i = 0; i < len; i++) {
+	for (i = 0; i < len; i++) {
 		if (mappings[i].param.index == mapping->param.index 
 		&&  mappings[i].param.subindex == mapping->param.subindex) {
 			mappings[i] = *mapping;
@@ -1645,6 +1692,10 @@ struct epl_convo {
 	guint8 cn;
 	wmem_array_t *TPDO; /* CN->MN */
 	wmem_array_t *RPDO; /* MN->CN */
+	struct {
+		wmem_array_t *CN;
+		wmem_array_t *MN;
+	} profiles;
 };
 
 static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint offset, guint len, guint8 msgType)
@@ -1653,7 +1704,7 @@ static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_t
 	wmem_array_t *mapping = msgType == EPL_PRES ? convo->TPDO : convo->RPDO;
 	tvbuff_t *payload_tvb;
 	guint rem_len;
-	guint maps_count;
+	guint i, maps_count;
 	guint off = 0;
 
 	// TODO: what if some are set via SDO and some are set via XDC
@@ -1662,7 +1713,7 @@ static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_t
 	rem_len = tvb_captured_length_remaining(tvb, offset);
 	payload_tvb = tvb_new_subset_length(tvb, offset, len > rem_len ? rem_len : len);
 
-	for (guint i = 0; i < maps_count; i++) {
+	for (i = 0; i < maps_count; i++) {
 		guint willbe_offset_bits = mappings[i].offset + mappings[i].len;
 		proto_tree *ti;
 		if (willbe_offset_bits > rem_len * 8) {
@@ -1699,9 +1750,33 @@ static struct epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 		convo->TPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
 		convo->RPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
 
+		convo->profiles.CN = wmem_array_new(wmem_file_scope(), sizeof (struct profile*));
+		wmem_array_append(
+				convo->profiles.CN,
+				wmem_array_get_raw(CN_base_profiles),
+				wmem_array_get_count(CN_base_profiles)
+		);
+
+		convo->profiles.MN = MN_base_profiles; /* Any reason to keep this? */
+
 		conversation_add_proto_data(epan_conversation, proto_epl, (void *)convo);
 	}
 	return convo;
+}
+static struct object *object_lookup(struct profile **profiles, size_t profile_count, guint16 index)
+{
+	struct object *obj = NULL;
+	size_t i;
+
+	for (i = 0; i < profile_count; i++) {
+		struct profile *profile = profiles[i];
+		fprintf(stderr, "profile=%p, objects =%p, index=%x\n", (void*)profile, (void*)profile->objects, index);
+                if ((obj = g_hash_table_lookup(profile->objects, &index))) {
+			break;
+		}
+	}
+
+	return obj;
 }
 
 static GHashTable *epl_duplication_table = NULL;
@@ -1837,6 +1912,14 @@ setup_dissector(void)
 	memset(&epl_asnd_sdo_reassembly_read, 0, sizeof(epl_sdo_reassembly));
 	/* create reassembly table */
 	reassembly_table_init(&epl_reassembly_table, &addresses_reassembly_table_functions);
+
+	/* init device profiles support */
+	epl_profiles = g_hash_table_new(g_int_hash, g_int_equal);
+	CN_base_profiles = wmem_array_new(wmem_file_scope(), sizeof (struct profile*));
+	MN_base_profiles = wmem_array_new(wmem_file_scope(), sizeof (struct profile*));
+
+	install_default_profiles(); /* FIXME: remove this */
+
 	/* populate static address for convo */
 	set_address(&convo_mac, AT_NONE, 0, NULL);
 }
@@ -3250,7 +3333,7 @@ gint
 dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
 	gint size, payload_length = 0;
-	guint16 idx = 0x00, nosub = 0x00, sod_index = 0x00, error = 0xFF, entries = 0x00, sub_val = 0x00;
+	guint16 idx = 0x00, nosub = 0x00, sod_index = 0x00, error = 0xFF, entries = 0x00, sub_val = 0x00; 
 	guint8 subindex = 0x00;
 	guint32 fragmentId = 0;
 	guint32 frame = 0;
@@ -3268,20 +3351,33 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 
 		if (segmented <= EPL_ASND_SDO_CMD_SEGMENTATION_INITIATE_TRANSFER)
 		{
+			struct object *obj;
+			struct profile **profiles;
+
 			/* get index offset */
 			idx = tvb_get_letohs(tvb, offset);
 			/* add index item */
 			psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-			/* value to string */
-			index_str = rval_to_str_const(idx, sod_cmd_str, "unknown");
-			/* get index string value */
-			sod_index = str_to_val(index_str, sod_cmd_str_val, error);
-			/* get subindex string */
-			sub_index_str = val_to_str_ext_const(idx, &sod_cmd_no_sub, "unknown");
-			/* get subindex string value*/
-			nosub = str_to_val(sub_index_str, sod_cmd_str_no_sub,error);
-
+			/* look up index in registered profiles */
+			profiles = wmem_array_get_raw(convo->profiles.CN);
+			obj = object_lookup(
+					profiles,
+					wmem_array_get_count(convo->profiles.CN),
+					idx
+			); // TODO: return the profile where the object was found too
+			printf("obj=%p\n", (void*)obj);
+			if (!obj) {
+				/* value to string */
+				index_str = rval_to_str_const(idx, sod_cmd_str, "unknown");
+				/* get index string value */
+				sod_index = str_to_val(index_str, sod_cmd_str_val, error);
+				/* get subindex string */
+				sub_index_str = val_to_str_ext_const(idx, &sod_cmd_no_sub, "unknown");
+				/* get subindex string value*/
+				nosub = str_to_val(sub_index_str, sod_cmd_str_no_sub,error);
+			}
 			offset += 2;
+
 			/* get subindex offset */
 			subindex = tvb_get_guint8(tvb, offset);
 			/* get subindex string */
@@ -3293,10 +3389,15 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 							val_to_str_ext(EPL_ASND_SDO_COMMAND_WRITE_BY_INDEX, &epl_sdo_asnd_commands_short_ext, "Command(%02X)"),
 							segment_size, idx, subindex);
 
-			/* string is in list */
-			if(sod_index != error)
+			if(obj || sod_index == error) 
 			{
-				/* add ondex string to index item */
+				const char *name = obj ? obj->name :val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined");
+				proto_item_append_text(psf_item, " (%s)", name);
+				col_append_fstr(pinfo->cinfo, COL_INFO, " (%s", name);
+			}
+			else /* string is in list */
+			{
+				/* add index string to index item */
 				proto_item_append_text(psf_item," (%s", val_to_str_ext_const(((guint32)(sod_index<<16)), &sod_index_names, "User Defined"));
 				proto_item_append_text(psf_item,"_%02Xh", (idx-sod_index));
 				if(sod_index == EPL_SOD_PDO_RX_MAPP || sod_index == EPL_SOD_PDO_TX_MAPP)
@@ -3319,11 +3420,6 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 					col_append_fstr(pinfo->cinfo, COL_INFO, "_REC");
 				}
 				idx = sod_index;
-			}
-			else
-			{
-				proto_item_append_text(psf_item," (%s)", val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined"));
-				col_append_fstr(pinfo->cinfo, COL_INFO, " (%s", val_to_str_ext_const(((guint32) (idx << 16)), &sod_index_names, "User Defined"));
 			}
 
 			if(sub_val != error)
@@ -3866,6 +3962,10 @@ proto_register_epl(void)
 		{ &hf_epl_convo,
 			{ "Conversation ID", "epl-xdd.convo",
 				FT_UINT8, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_info,
+			{ "Debugging Info", "epl-xdd.info",
+				FT_STRING, BASE_NONE, NULL, 0x0, NULL, HFILL }
 		},
 
 		/* Common data fields (same for all message types) */
@@ -4876,6 +4976,7 @@ proto_register_epl(void)
 
 	/* tap-registration */
 	/*  epl_tap = register_tap("epl-xdd");*/
+	puts("EPL+XDD plugin built on " __DATE__ " " __TIME__);
 }
 
 

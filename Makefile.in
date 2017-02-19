@@ -152,7 +152,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-subdir = plugins/epl
+subdir = plugins/epl_plus_xdd
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ax_append_flag.m4 \
 	$(top_srcdir)/m4/ax_compiler_vendor.m4 \
@@ -201,21 +201,23 @@ am__uninstall_files_from_dir = { \
   }
 am__installdirs = "$(DESTDIR)$(plugindir)"
 LTLIBRARIES = $(plugin_LTLIBRARIES)
-epl_la_LIBADD =
-am__objects_1 = epl_la-packet-epl.lo
+epl_plus_xdd_la_LIBADD =
+am__objects_1 = epl_plus_xdd_la-packet-epl.lo
 am__objects_2 = $(am__objects_1)
 am__objects_3 = $(am__objects_2)
 am__objects_4 =
 am__objects_5 = $(am__objects_4)
-am_epl_la_OBJECTS = epl_la-plugin.lo $(am__objects_3) $(am__objects_5)
-epl_la_OBJECTS = $(am_epl_la_OBJECTS)
+am_epl_plus_xdd_la_OBJECTS = epl_plus_xdd_la-plugin.lo \
+	$(am__objects_3) $(am__objects_5)
+epl_plus_xdd_la_OBJECTS = $(am_epl_plus_xdd_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-epl_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
-	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(epl_la_CFLAGS) $(CFLAGS) \
-	$(epl_la_LDFLAGS) $(LDFLAGS) -o $@
+epl_plus_xdd_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
+	$(epl_plus_xdd_la_CFLAGS) $(CFLAGS) $(epl_plus_xdd_la_LDFLAGS) \
+	$(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -250,8 +252,8 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(epl_la_SOURCES)
-DIST_SOURCES = $(epl_la_SOURCES)
+SOURCES = $(epl_plus_xdd_la_SOURCES)
+DIST_SOURCES = $(epl_plus_xdd_la_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -277,8 +279,7 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 am__DIST_COMMON = $(srcdir)/../Makefile.am.inc $(srcdir)/Makefile.in \
-	$(top_srcdir)/Makefile.am.inc $(top_srcdir)/depcomp AUTHORS \
-	COPYING NEWS README
+	$(top_srcdir)/Makefile.am.inc $(top_srcdir)/depcomp COPYING
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 A2X = @A2X@
 A2X_LYNX = @A2X_LYNX@
@@ -347,7 +348,6 @@ HAVE_OSX_PACKAGING = @HAVE_OSX_PACKAGING@
 HAVE_PKGMK = @HAVE_PKGMK@
 HAVE_PKGPROTO = @HAVE_PKGPROTO@
 HAVE_PKGTRANS = @HAVE_PKGTRANS@
-HAVE_SHELLCHECK = @HAVE_SHELLCHECK@
 HAVE_SVR4_PACKAGING = @HAVE_SVR4_PACKAGING@
 HAVE_XCODEBUILD = @HAVE_XCODEBUILD@
 INSTALL = @INSTALL@
@@ -360,7 +360,6 @@ KRB5_CONFIG = @KRB5_CONFIG@
 KRB5_LIBS = @KRB5_LIBS@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
-LDFLAGS_BIGSHAREDLIB = @LDFLAGS_BIGSHAREDLIB@
 LDFLAGS_FOR_BUILD = @LDFLAGS_FOR_BUILD@
 LDFLAGS_SHAREDLIB = @LDFLAGS_SHAREDLIB@
 LEX = @LEX@
@@ -389,17 +388,13 @@ LTLIBOBJS = @LTLIBOBJS@
 LT_SYS_LIBRARY_PATH = @LT_SYS_LIBRARY_PATH@
 LUA_CFLAGS = @LUA_CFLAGS@
 LUA_LIBS = @LUA_LIBS@
-LZ4_LIBS = @LZ4_LIBS@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 MOC = @MOC@
 MOC_OPTIONS = @MOC_OPTIONS@
-NGHTTP2_LIBS = @NGHTTP2_LIBS@
 NM = @NM@
 NMEDIT = @NMEDIT@
-NO_SANITIZE_CFLAGS = @NO_SANITIZE_CFLAGS@
-NO_SANITIZE_LDFLAGS = @NO_SANITIZE_LDFLAGS@
 OBJDUMP = @OBJDUMP@
 OBJEXT = @OBJEXT@
 OSX_APP_FLAGS = @OSX_APP_FLAGS@
@@ -445,9 +440,6 @@ SED = @SED@
 SETCAP = @SETCAP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
-SNAPPY_LIBS = @SNAPPY_LIBS@
-SPANDSP_CFLAGS = @SPANDSP_CFLAGS@
-SPANDSP_LIBS = @SPANDSP_LIBS@
 SPEEXDSP_CFLAGS = @SPEEXDSP_CFLAGS@
 SPEEXDSP_LIBS = @SPEEXDSP_LIBS@
 SSL_LIBS = @SSL_LIBS@
@@ -562,8 +554,6 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 tshark_bin = @tshark_bin@
 tshark_man = @tshark_man@
-udpdump_bin = @udpdump_bin@
-udpdump_man = @udpdump_man@
 wireshark_SUBDIRS = @wireshark_SUBDIRS@
 wireshark_bin = @wireshark_bin@
 wireshark_man = @wireshark_man@
@@ -609,8 +599,8 @@ am__v_YACC_ = $(am__v_YACC_@AM_DEFAULT_V@)
 am__v_YACC_0 = @echo "  YACC    " $@;
 
 # abi-compliance-checker descriptor
-abi_incdirs = $(subst -I,NEWLINE,$(filter -I%,$(AM_CPPFLAGS) -I$(abs_top_srcdir) -I$(abs_srcdir)))
-abi_sysdirs = $(subst -isystem,NEWLINE,$(filter -isystem%,$(AM_CPPFLAGS)))
+abi_incdirs = $(subst -I,NEWLINE,$(filter -I%,$(WS_CFLAGS) -I$(abs_top_srcdir) -I$(abs_srcdir)))
+abi_sysdirs = $(subst -isystem,NEWLINE,$(filter -isystem%,$(WS_CFLAGS)))
 abi_includes = $(abi_incdirs) $(abi_sysdirs)
 PLUGIN_CPPFLAGS = $(INCLUDEDIRS) $(WS_CPPFLAGS) $(GLIB_CFLAGS)
 PLUGIN_CFLAGS = 
@@ -746,7 +736,7 @@ CPP_FILES = \
 
 
 # the name of the plugin
-PLUGIN_NAME = epl
+PLUGIN_NAME = epl_plus_xdd
 
 # Non-generated sources to be scanned for registration routines
 NONGENERATED_REGISTER_C_FILES = \
@@ -765,18 +755,18 @@ CLEAN_HEADER_FILES = \
 HEADER_FILES = \
 	$(CLEAN_HEADER_FILES)
 
-plugin_LTLIBRARIES = epl.la
-epl_la_SOURCES = \
+plugin_LTLIBRARIES = epl_plus_xdd.la
+epl_plus_xdd_la_SOURCES = \
 	plugin.c \
 	moduleinfo.h \
 	$(SRC_FILES)	\
 	$(HEADER_FILES)
 
-epl_la_CPPFLAGS = $(AM_CPPFLAGS) $(PLUGIN_CPPFLAGS)
-epl_la_CFLAGS = $(AM_CFLAGS) $(PLUGIN_CFLAGS)
-epl_la_LDFLAGS = $(PLUGIN_LDFLAGS)
+epl_plus_xdd_la_CPPFLAGS = $(AM_CPPFLAGS) $(PLUGIN_CPPFLAGS)
+epl_plus_xdd_la_CFLAGS = $(AM_CFLAGS) $(PLUGIN_CFLAGS)
+epl_plus_xdd_la_LDFLAGS = $(PLUGIN_LDFLAGS)
 CLEANFILES = \
-	epl \
+	epl_plus_xdd \
 	*~
 
 MAINTAINERCLEANFILES = \
@@ -800,9 +790,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(top_srcdir)/Makefile.am.inc $(sr
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu plugins/epl/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu plugins/epl_plus_xdd/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu plugins/epl/Makefile
+	  $(AUTOMAKE) --gnu plugins/epl_plus_xdd/Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
 	  *config.status*) \
@@ -857,8 +847,8 @@ clean-pluginLTLIBRARIES:
 	  rm -f $${locs}; \
 	}
 
-epl.la: $(epl_la_OBJECTS) $(epl_la_DEPENDENCIES) $(EXTRA_epl_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(epl_la_LINK) -rpath $(plugindir) $(epl_la_OBJECTS) $(epl_la_LIBADD) $(LIBS)
+epl_plus_xdd.la: $(epl_plus_xdd_la_OBJECTS) $(epl_plus_xdd_la_DEPENDENCIES) $(EXTRA_epl_plus_xdd_la_DEPENDENCIES) 
+	$(AM_V_CCLD)$(epl_plus_xdd_la_LINK) -rpath $(plugindir) $(epl_plus_xdd_la_OBJECTS) $(epl_plus_xdd_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -866,8 +856,8 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/epl_la-packet-epl.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/epl_la-plugin.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/epl_plus_xdd_la-packet-epl.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/epl_plus_xdd_la-plugin.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -893,19 +883,19 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
 
-epl_la-plugin.lo: plugin.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(epl_la_CPPFLAGS) $(CPPFLAGS) $(epl_la_CFLAGS) $(CFLAGS) -MT epl_la-plugin.lo -MD -MP -MF $(DEPDIR)/epl_la-plugin.Tpo -c -o epl_la-plugin.lo `test -f 'plugin.c' || echo '$(srcdir)/'`plugin.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/epl_la-plugin.Tpo $(DEPDIR)/epl_la-plugin.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='plugin.c' object='epl_la-plugin.lo' libtool=yes @AMDEPBACKSLASH@
+epl_plus_xdd_la-plugin.lo: plugin.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(epl_plus_xdd_la_CPPFLAGS) $(CPPFLAGS) $(epl_plus_xdd_la_CFLAGS) $(CFLAGS) -MT epl_plus_xdd_la-plugin.lo -MD -MP -MF $(DEPDIR)/epl_plus_xdd_la-plugin.Tpo -c -o epl_plus_xdd_la-plugin.lo `test -f 'plugin.c' || echo '$(srcdir)/'`plugin.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/epl_plus_xdd_la-plugin.Tpo $(DEPDIR)/epl_plus_xdd_la-plugin.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='plugin.c' object='epl_plus_xdd_la-plugin.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(epl_la_CPPFLAGS) $(CPPFLAGS) $(epl_la_CFLAGS) $(CFLAGS) -c -o epl_la-plugin.lo `test -f 'plugin.c' || echo '$(srcdir)/'`plugin.c
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(epl_plus_xdd_la_CPPFLAGS) $(CPPFLAGS) $(epl_plus_xdd_la_CFLAGS) $(CFLAGS) -c -o epl_plus_xdd_la-plugin.lo `test -f 'plugin.c' || echo '$(srcdir)/'`plugin.c
 
-epl_la-packet-epl.lo: packet-epl.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(epl_la_CPPFLAGS) $(CPPFLAGS) $(epl_la_CFLAGS) $(CFLAGS) -MT epl_la-packet-epl.lo -MD -MP -MF $(DEPDIR)/epl_la-packet-epl.Tpo -c -o epl_la-packet-epl.lo `test -f 'packet-epl.c' || echo '$(srcdir)/'`packet-epl.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/epl_la-packet-epl.Tpo $(DEPDIR)/epl_la-packet-epl.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='packet-epl.c' object='epl_la-packet-epl.lo' libtool=yes @AMDEPBACKSLASH@
+epl_plus_xdd_la-packet-epl.lo: packet-epl.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(epl_plus_xdd_la_CPPFLAGS) $(CPPFLAGS) $(epl_plus_xdd_la_CFLAGS) $(CFLAGS) -MT epl_plus_xdd_la-packet-epl.lo -MD -MP -MF $(DEPDIR)/epl_plus_xdd_la-packet-epl.Tpo -c -o epl_plus_xdd_la-packet-epl.lo `test -f 'packet-epl.c' || echo '$(srcdir)/'`packet-epl.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/epl_plus_xdd_la-packet-epl.Tpo $(DEPDIR)/epl_plus_xdd_la-packet-epl.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='packet-epl.c' object='epl_plus_xdd_la-packet-epl.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(epl_la_CPPFLAGS) $(CPPFLAGS) $(epl_la_CFLAGS) $(CFLAGS) -c -o epl_la-packet-epl.lo `test -f 'packet-epl.c' || echo '$(srcdir)/'`packet-epl.c
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(epl_plus_xdd_la_CPPFLAGS) $(CPPFLAGS) $(epl_plus_xdd_la_CFLAGS) $(CFLAGS) -c -o epl_plus_xdd_la-packet-epl.lo `test -f 'packet-epl.c' || echo '$(srcdir)/'`packet-epl.c
 
 mostlyclean-libtool:
 	-rm -f *.lo
