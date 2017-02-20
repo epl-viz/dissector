@@ -1769,11 +1769,11 @@ static struct object *object_lookup(struct profile **profiles, size_t profile_co
 {
 	struct object *obj = NULL;
 	size_t i;
+	int idx = index;
 
 	for (i = 0; i < profile_count; i++) {
 		struct profile *profile = profiles[i];
-		fprintf(stderr, "profile=%p, objects =%p, index=%x\n", (void*)profile, (void*)profile->objects, index);
-                if ((obj = g_hash_table_lookup(profile->objects, &index))) {
+                if ((obj = g_hash_table_lookup(profile->objects, &idx))) {
 			break;
 		}
 	}
