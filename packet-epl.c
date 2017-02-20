@@ -1712,6 +1712,8 @@ static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_t
 
 	rem_len = tvb_captured_length_remaining(tvb, offset);
 	payload_tvb = tvb_new_subset_length(tvb, offset, len > rem_len ? rem_len : len);
+	rem_len = tvb_captured_length_remaining(payload_tvb, 0);
+
 
 	for (i = 0; i < maps_count; i++) {
 		guint willbe_offset_bits = mappings[i].offset + mappings[i].len;
@@ -3365,7 +3367,6 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 					wmem_array_get_count(convo->profiles.CN),
 					idx
 			); // TODO: return the profile where the object was found too
-			printf("obj=%p\n", (void*)obj);
 			if (!obj) {
 				/* value to string */
 				index_str = rval_to_str_const(idx, sod_cmd_str, "unknown");
