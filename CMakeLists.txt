@@ -22,10 +22,11 @@
 include(WiresharkPlugin)
 
 # Plugin name and version info (major minor micro extra)
-set_module_info(epl_plus_xdd 0 0 2 0)
+set_module_info(epl_plus_xdd 0 0 3 0)
 
 set(DISSECTOR_SRC
 	packet-epl.c
+	xdd.c
 )
 
 set(PLUGIN_FILES
@@ -45,7 +46,12 @@ if(WERROR_COMMON_FLAGS)
   )
 endif(WERROR_COMMON_FLAGS)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+set(LibXml2_ROOT ${CMAKE_CURRENT_LIST_DIR})
+find_package(LibXml2 REQUIRED )
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${LIBXML2_INCLUDE_DIR})
+set(LIBS ${LIBS} ${LIBXML2_LIBRARIES})
+
 
 register_dissector_files(plugin.c
 	plugin
@@ -53,6 +59,7 @@ register_dissector_files(plugin.c
 )
 
 add_plugin_library(epl_plus_xdd)
+target_link_libraries(epl_plus_xdd ${LIBS})
 
 install(TARGETS epl_plus_xdd
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/${CPACK_PACKAGE_NAME}/plugins/${CPACK_PACKAGE_VERSION} NAMELINK_SKIP

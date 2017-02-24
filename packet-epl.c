@@ -65,6 +65,7 @@
 #include <epan/reassemble.h>
 #include <epan/proto_data.h>
 #include <glib.h>
+#include "xdd.h"
 // TODO: remove this 
 #include <stdio.h>
 
@@ -1514,6 +1515,49 @@ static gint hf_epl_pdo_unsigned48 = -1;
 static gint hf_epl_pdo_unsigned56 = -1;
 static gint hf_epl_pdo_unsigned64 = -1;
 
+static struct dataTypeMap_in {
+    const char *name;
+    gint *hf;
+} dataTypeMap_in[] = {
+	{ "Boolean", &hf_epl_pdo_boolean },
+	{ "Integer8", &hf_epl_pdo_integer8 },
+	{ "Integer16", &hf_epl_pdo_integer16},
+	{ "Integer32", &hf_epl_pdo_integer32},
+	{ "Unsigned8", &hf_epl_pdo_unsigned8},
+	{ "Unsigned16", &hf_epl_pdo_unsigned16},
+	{ "Unsigned32", &hf_epl_pdo_unsigned32},
+	{ "Real32", &hf_epl_pdo_real32},
+	{ "Visible_String", &hf_epl_pdo_visible_string},
+	{ "Integer24", &hf_epl_pdo_integer24},
+	{ "Real64", &hf_epl_pdo_real64},
+	{ "Integer40", &hf_epl_pdo_integer40},
+	{ "Integer48", &hf_epl_pdo_integer48},
+	{ "Integer56", &hf_epl_pdo_integer56},
+	{ "Integer64", &hf_epl_pdo_integer64},
+	{ "Octet_String", &hf_epl_pdo_octet_string},
+	{ "Unicode_String", &hf_epl_pdo_unicode_string},
+	{ "Time_of_Day", &hf_epl_pdo_time_of_day},
+	{ "Time_Diff", &hf_epl_pdo_time_difference},
+	{ "Domain", &hf_epl_pdo_domain},
+	{ "Unsigned24", &hf_epl_pdo_unsigned24},
+	{ "Unsigned40", &hf_epl_pdo_unsigned40},
+	{ "Unsigned48", &hf_epl_pdo_unsigned48},
+	{ "Unsigned56", &hf_epl_pdo_unsigned56},
+	{ "Unsigned64", &hf_epl_pdo_unsigned64},
+	/*{ "MAC_ADDRESS", &hf_epl_pdo_unsigned24},*/
+	/*{ "IP_ADDRESS", &hf_epl_pdo_unsigned24},*/
+	/*{ "NETTIME", &hf_epl_pdo_unsigned24},*/
+	{ NULL, NULL }
+};
+gint *epl_type_to_hf(const char *name) {
+	struct dataTypeMap_in *entry;
+	for (entry = dataTypeMap_in; entry->name; entry++) {
+		if (strcmp(name, entry->name) == 0)
+			return entry->hf;
+	}
+	return NULL;
+}
+
 
 static gint ett_epl_fragment                                 = -1;
 static gint ett_epl_fragments                                = -1;
@@ -1594,6 +1638,14 @@ static reassembly_table epl_reassembly_table;
 #define EPL_TO_LEGACY_ETHERNET_ROUTER_NODEID    254
 #define EPL_BROADCAST_NODEID                    255
 
+gboolean epl_g_int16_equal(gconstpointer v1, gconstpointer v2) {
+    return *(guint16*)v1 == *(guint16*)v2;
+}
+
+guint epl_g_int16_hash(gconstpointer v) {
+    return *(guint16*)v;
+}
+
 static GHashTable *epl_profiles;
 static wmem_array_t *CN_base_profiles, *MN_base_profiles;
 
@@ -1601,7 +1653,7 @@ struct profile *profile_new(guint16 id) {
 	struct profile *profile = g_new0(struct profile, 1);
 
 	profile->id = id;
-	profile->objects = g_hash_table_new(g_int_hash, g_int_equal);
+	profile->objects = g_hash_table_new(epl_g_int16_hash, epl_g_int16_equal);
 
 	g_hash_table_insert(epl_profiles, &profile->id, profile);
 	return profile;
@@ -1615,11 +1667,9 @@ struct object *profile_object_add(struct profile *profile, guint16 index) {
 	return object;
 }
 static void install_default_profiles(void) {
-	struct profile *epsg401 = profile_new(401);
-	struct object *object = profile_object_add(epsg401, 0x1011);
-	wmem_array_append_one(CN_base_profiles, epsg401);
+	struct profile *ds401 = xdd_load(401, "/Users/a3f/pse/wireshark/plugins/epl_plus_xdd/xdd/401.xdc");
 
-	object->name = "Aly Baba";
+	wmem_array_append_one(CN_base_profiles, ds401);
 }
 
 static address convo_mac;
@@ -1764,15 +1814,29 @@ static struct epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 	}
 	return convo;
 }
+
+// TODO: remove this
+#if 1
+static void iterator(gpointer key, gpointer value, gpointer user_data) {
+    struct object *obj = value;
+    printf("%d. [%d/%x => '%s']\n", *(int*)user_data, *(gint*)key, obj->index, obj->name);
+}
+void debug_me_hard(void) {
+	struct profile **profile = wmem_array_get_raw(CN_base_profiles);
+	size_t count = wmem_array_get_count(CN_base_profiles);
+	size_t i;
+	for (i = 0; i < count; i++)
+		g_hash_table_foreach(profile[i]->objects, (GHFunc)iterator, &i);
+}
+#endif
 static struct object *object_lookup(struct profile **profiles, size_t profile_count, guint16 index)
 {
 	struct object *obj = NULL;
 	size_t i;
-	int idx = index;
 
 	for (i = 0; i < profile_count; i++) {
 		struct profile *profile = profiles[i];
-                if ((obj = g_hash_table_lookup(profile->objects, &idx))) {
+                if ((obj = g_hash_table_lookup(profile->objects, &index))) {
 			break;
 		}
 	}
@@ -1915,9 +1979,11 @@ setup_dissector(void)
 	reassembly_table_init(&epl_reassembly_table, &addresses_reassembly_table_functions);
 
 	/* init device profiles support */
-	epl_profiles = g_hash_table_new(g_int_hash, g_int_equal);
+	epl_profiles = g_hash_table_new(epl_g_int16_hash, epl_g_int16_equal);
 	CN_base_profiles = wmem_array_new(wmem_file_scope(), sizeof (struct profile*));
 	MN_base_profiles = wmem_array_new(wmem_file_scope(), sizeof (struct profile*));
+
+	xdd_init();
 
 	install_default_profiles(); /* FIXME: remove this */
 
@@ -1928,6 +1994,7 @@ setup_dissector(void)
 static void
 cleanup_dissector(void)
 {
+	xdd_free();
 	reassembly_table_destroy(&epl_reassembly_table);
 	/*g_hash_free(epl_duplication_table);*/
 	count = 0;
@@ -3553,7 +3620,10 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 		/* if the frame is a PDO Mapping and the subindex is bigger than 0x00 */
 		if((idx == EPL_SOD_PDO_TX_MAPP && subindex > entries) || (idx == EPL_SOD_PDO_RX_MAPP && subindex > entries))
 		{
+			proto_item *ti;
 			struct object_mapping map;
+			struct object *obj;
+			struct profile **profiles;
 			wmem_strbuf_t *name;
 			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
 			name = wmem_strbuf_new(wmem_file_scope(), NULL);
@@ -3562,7 +3632,18 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			psf_tree = proto_item_add_subtree(psf_item, ett_epl_asnd_sdo_cmd_data_mapping);
 
 			idx = tvb_get_letohs(tvb, offset);
-			proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, offset, 2, idx,"Index: 0x%04X", idx);
+			ti = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, offset, 2, idx,"Index: 0x%04X", idx);
+
+			/* look up index in registered profiles */
+			profiles = wmem_array_get_raw(convo->profiles.CN);
+			obj = object_lookup(
+					profiles,
+					wmem_array_get_count(convo->profiles.CN),
+					idx
+			);
+
+			if (obj) proto_item_append_text (ti, " (%s)", obj->name);
+
 			//TODO: remove 
 			map.param.index = idx;
 			wmem_strbuf_append_printf(name, "%04X.", idx);

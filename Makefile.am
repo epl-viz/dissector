@@ -27,6 +27,7 @@ PLUGIN_NAME = epl_plus_xdd
 # Non-generated sources to be scanned for registration routines
 NONGENERATED_REGISTER_C_FILES = \
 	packet-epl.c
+	xdd.c
 
 # Non-generated sources
 NONGENERATED_C_FILES = \
@@ -35,6 +36,7 @@ NONGENERATED_C_FILES = \
 # Headers.
 CLEAN_HEADER_FILES = \
 	packet-epl.h
+	xdd.h
 
 HEADER_FILES = \
 	$(CLEAN_HEADER_FILES)

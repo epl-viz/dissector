@@ -8,6 +8,11 @@
 
 #include <glib.h>
 
+gboolean epl_g_int16_equal(gconstpointer v1, gconstpointer v2);
+guint epl_g_int16_hash(gconstpointer v);
+
+gint *epl_type_to_hf(const char *name);
+
 struct profile {
 	guint16 id;
 	GHashTable *objects;
