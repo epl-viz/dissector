@@ -55,6 +55,8 @@
 
 #include "config.h"
 
+#include "packet-epl.h"
+
 #include <epan/conversation.h>
 #include <epan/packet.h>
 #include <epan/etypes.h>
@@ -1481,6 +1483,10 @@ static gint hf_epl_reassembled_length                        = -1;
 static gint hf_epl_reassembled_data                          = -1;
 
 /* EPL Data Types */
+static gint hf_epl_pdo                 = -1;
+static gint hf_epl_pdo_index           = -1;
+static gint hf_epl_pdo_subindex        = -1;
+
 static gint hf_epl_pdo_boolean	       = -1;
 static gint hf_epl_pdo_integer8        = -1;
 static gint hf_epl_pdo_integer16       = -1;
@@ -1558,6 +1564,7 @@ static gint ett_epl_el_entry_type   = -1;
 static gint ett_epl_sdo_entry_type  = -1;
 static gint ett_epl_asnd_nmt_dna    = -1;
 
+static gint ett_epl_pdo                       = -1;
 static gint ett_epl_sdo                       = -1;
 static gint ett_epl_sdo_sequence_layer        = -1;
 static gint ett_epl_sdo_command_layer         = -1;
@@ -1590,22 +1597,7 @@ static reassembly_table epl_reassembly_table;
 static GHashTable *epl_profiles;
 static wmem_array_t *CN_base_profiles, *MN_base_profiles;
 
-struct profile {
-	guint16 id;
-	GHashTable *objects;
-};
-
-struct subobject {
-	range_string *range;
-	const char *name;
-};
-struct object {
-    guint16 index;
-    const char *name;
-    GArray *subindices;
-};
-
-static struct profile *profile_new(guint16 id) {
+struct profile *profile_new(guint16 id) {
 	struct profile *profile = g_new0(struct profile, 1);
 
 	profile->id = id;
@@ -1614,7 +1606,7 @@ static struct profile *profile_new(guint16 id) {
 	g_hash_table_insert(epl_profiles, &profile->id, profile);
 	return profile;
 }
-static struct object *profile_object_add(struct profile *profile, guint16 index) {
+struct object *profile_object_add(struct profile *profile, guint16 index) {
 	struct object *object = g_new0(struct object, 1);
 
 	object->index = index;
@@ -1717,15 +1709,22 @@ static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_t
 
 	for (i = 0; i < maps_count; i++) {
 		guint willbe_offset_bits = mappings[i].offset + mappings[i].len;
-		proto_tree *ti;
+		proto_tree *psf_tree;
+		proto_item *psf_item, *ti;
 		if (willbe_offset_bits > rem_len * 8) {
 			break;
 		}
 
-		ti = proto_tree_add_string(epl_tree, hf_epl_info, payload_tvb, offset, 0, mappings[i].name);
+		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", mappings[i].name);
+		psf_tree = proto_item_add_subtree(psf_item, ett_epl_pdo);
+
+		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_pdo_index, payload_tvb, 0, 0, mappings[i].param.index, "%04X", mappings[i].param.index);
 		PROTO_ITEM_SET_GENERATED(ti);
 
-		dissect_epl_payload_fallback(epl_tree, payload_tvb, pinfo, mappings[i].offset / 8, mappings[i].len / 8, msgType);
+		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_pdo_subindex, payload_tvb, 0, 0, mappings[i].param.subindex, "%02X", mappings[i].param.subindex);
+		PROTO_ITEM_SET_GENERATED(ti);
+
+		dissect_epl_payload_fallback(psf_tree, payload_tvb, pinfo, mappings[i].offset / 8, mappings[i].len / 8, msgType);
 
 		off = willbe_offset_bits / 8;
 	}
@@ -3558,8 +3557,6 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			wmem_strbuf_t *name;
 			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
 			name = wmem_strbuf_new(wmem_file_scope(), NULL);
-			map.param.index = idx;
-			map.param.subindex = subindex;
 
 			psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_mapping, tvb, offset, 1, ENC_NA);
 			psf_tree = proto_item_add_subtree(psf_item, ett_epl_asnd_sdo_cmd_data_mapping);
@@ -3567,12 +3564,14 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			idx = tvb_get_letohs(tvb, offset);
 			proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, offset, 2, idx,"Index: 0x%04X", idx);
 			//TODO: remove 
+			map.param.index = idx;
 			wmem_strbuf_append_printf(name, "%04X.", idx);
 			offset += 2;
 
 			idx = tvb_get_letohs(tvb, offset);
 			proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, offset, 1, idx,"SubIndex: 0x%02X", idx);
-			wmem_strbuf_append_printf(name, "%04X", idx);
+			map.param.subindex = idx;
+			wmem_strbuf_append_printf(name, "%02X", idx);
 			offset += 2;
 
 			map.offset = idx = tvb_get_letohs(tvb, offset);
@@ -4788,6 +4787,19 @@ proto_register_epl(void)
 		},
 
 		/* EPL Data types */
+		{ &hf_epl_pdo,
+			{ "PDO", "epl-xdd.pdo",
+				FT_STRING, STR_ASCII, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_index,
+			{ "Index", "epl-xdd.pdo.index",
+				FT_UINT16, BASE_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_subindex,
+			{ "SubIndex", "epl-xdd.pdo.subindex",
+				FT_UINT8, BASE_HEX, NULL, 0x00, NULL, HFILL }
+		},
+
 		{ &hf_epl_pdo_boolean,
 			{ "Data", "epl-xdd.pdo.boolean",
 				FT_BOOLEAN, BASE_NONE, NULL, 0x00, NULL, HFILL }
@@ -4906,6 +4918,7 @@ proto_register_epl(void)
 		&ett_epl_sdo,
 		&ett_epl_sdo_data,
 		&ett_epl_asnd_sdo_cmd_data_mapping,
+		&ett_epl_pdo,
 		&ett_epl_sdo_sequence_layer,
 		&ett_epl_sdo_command_layer,
 		&ett_epl_soa_sync,
