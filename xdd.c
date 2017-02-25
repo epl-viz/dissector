@@ -9,7 +9,6 @@
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
-#include <assert.h>
 #include <errno.h>
 
 static guint16 strtou16(const char * str, char ** endptr, int base) {
@@ -137,9 +136,8 @@ int populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile) {
 
     for(i = 0; i < nodes->nodeNr; ++i) {
         xmlAttrPtr attr;
-        assert(nodes->nodeTab[i]);
 
-        if(nodes->nodeTab[i]->type != XML_ELEMENT_NODE)
+        if(!nodes->nodeTab[i] || nodes->nodeTab[i]->type != XML_ELEMENT_NODE)
             return -1;
 
         cur = nodes->nodeTab[i];
@@ -152,7 +150,7 @@ int populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile) {
             if (strcmp("dataType", key) == 0) {
                 xmlNode *subnode;
                 guint16 index = strtou16(val, &endptr, 16);
-                assert(endptr != val);
+                if (endptr == val) continue;
                 
                 for (subnode = cur->children; subnode; subnode = subnode->next) {
                     if (subnode->type == XML_ELEMENT_NODE) {
@@ -186,9 +184,8 @@ int populate_objectList(xmlNodeSetPtr nodes, void *data) {
     for(i = 0; i < nodes->nodeNr; ++i) {
         xmlAttrPtr attr;
         struct object obj = {0};
-        assert(nodes->nodeTab[i]);
 
-        if(nodes->nodeTab[i]->type != XML_ELEMENT_NODE)
+        if(!nodes->nodeTab[i] || nodes->nodeTab[i]->type != XML_ELEMENT_NODE)
             return -1;
 
         cur = nodes->nodeTab[i];
@@ -200,14 +197,14 @@ int populate_objectList(xmlNodeSetPtr nodes, void *data) {
 
             if (strcmp("index", key) == 0) {
                 obj.index = strtou16(val, &endptr, 16);
-                assert(endptr != val);
+                if (val == endptr) break;
 
             } else if (strcmp("name", key) == 0) {
                 obj.name = g_strdup(val);
 
             } else if (strcmp("objectType", key) == 0) {
                 obj.kind = strtou16(val, &endptr, 16);
-                assert((7 <= obj.kind && obj.kind <= 9) && endptr != val);
+                /*assert((7 <= obj.kind && obj.kind <= 9) && endptr != val);*/
 
             } else if (strcmp("dataType", key) == 0) {
                 guint16 id = strtou16(val, &endptr, 16);
