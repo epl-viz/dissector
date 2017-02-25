@@ -1503,8 +1503,12 @@ static gint hf_epl_pdo_octet_string    = -1;
 static gint hf_epl_pdo_unicode_string  = -1;
 static gint hf_epl_pdo_time_of_day     = -1;
 static gint hf_epl_pdo_time_difference = -1;
+static gint hf_epl_pdo_nettime	       = -1;
 
 static gint hf_epl_pdo_domain     = -1;
+static gint hf_epl_pdo_mac        = -1;
+static gint hf_epl_pdo_ipv4       = -1;
+
 static gint hf_epl_pdo_integer24  = -1;
 static gint hf_epl_pdo_real64     = -1;
 static gint hf_epl_pdo_integer40  = -1;
@@ -1541,15 +1545,17 @@ static const struct dataTypeMap_in {
 	{ "Unicode_String", &hf_epl_pdo_unicode_string, ENC_UCS_2 },
 	/*{ "Time_of_Day", &hf_epl_pdo_time_of_day, ENC_NA },*/
 	/*{ "Time_Diff", &hf_epl_pdo_time_difference, ENC_NA },*/
+	{ "NETTIME", &hf_epl_pdo_nettime, ENC_TIME_TIMESPEC },
+
 	/*{ "Domain", &hf_epl_pdo_domain, ENC_NA },*/
+	{ "MAC_ADDRESS", &hf_epl_pdo_mac, ENC_BIG_ENDIAN },
+	{ "IP_ADDRESS", &hf_epl_pdo_ipv4, ENC_BIG_ENDIAN },
+
 	{ "Unsigned24", &hf_epl_pdo_unsigned24, ENC_LITTLE_ENDIAN },
 	{ "Unsigned40", &hf_epl_pdo_unsigned40, ENC_LITTLE_ENDIAN },
 	{ "Unsigned48", &hf_epl_pdo_unsigned48, ENC_LITTLE_ENDIAN },
 	{ "Unsigned56", &hf_epl_pdo_unsigned56, ENC_LITTLE_ENDIAN },
 	{ "Unsigned64", &hf_epl_pdo_unsigned64, ENC_LITTLE_ENDIAN },
-	/*{ "MAC_ADDRESS", &hf_epl_pdo_unsigned24, ENC_NA },*/
-	/*{ "IP_ADDRESS", &hf_epl_pdo_unsigned24, ENC_NA },*/
-	/*{ "NETTIME", &hf_epl_pdo_unsigned24, ENC_NA },*/
 	{ NULL, NULL }
 };
 
@@ -4944,6 +4950,7 @@ proto_register_epl(void)
 			{ "Data", "epl-xdd.pdo.string",
 				FT_STRING, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
+#if 0
 		{ &hf_epl_pdo_time_of_day, /* not 1:1 */
 			{ "Data", "epl-xdd.pdo.time_of_day",
 				FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0x00, NULL, HFILL }
@@ -4952,11 +4959,24 @@ proto_register_epl(void)
 			{ "Data", "epl-xdd.pdo.time_difference",
 				FT_RELATIVE_TIME, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
-
+#endif
+		{ &hf_epl_pdo_nettime,
+			{ "Data", "epl-xdd.pdo.nettime",
+				FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0x0, NULL, HFILL }
+		},
 		{ &hf_epl_pdo_domain,
 			{ "Data", "epl-xdd.pdo.domain",
 				FT_BYTES, BASE_ALLOW_ZERO, NULL, 0x00, NULL, HFILL }
 		},
+		{ &hf_epl_pdo_mac,
+			{ "Data", "epl-xdd.pdo.mac",
+				FT_ETHER, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_ipv4,
+			{ "Data", "epl-xdd.pdo.ip",
+				FT_BYTES, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+
 		{ &hf_epl_pdo_integer24,
 			{ "Data", "epl-xdd.pdo.integer24",
 				FT_INT24, BASE_DEC, NULL, 0x00, NULL, HFILL }
