@@ -10,10 +10,15 @@
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
 #include <assert.h>
+#include <errno.h>
 
-#ifdef __GNUC__
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#endif
+static guint16 strtou16(const char * str, char ** endptr, int base) {
+	unsigned long val = strtoul(str, endptr, base);
+	if (val >= G_MAXUINT16 && errno == ERANGE)
+		val = G_MAXUINT16;
+	return val;
+}
+
 
 void xdd_init(void) {
     xmlInitParser();
@@ -116,9 +121,13 @@ fail:
     return NULL;
 }
 
+void xdd_unload() {
+// FIXME implement this (g_strdup'd stuff for example)
+}
+
 struct dataType {
-    guint16 index;
-    gint *hf;
+    guint16 id;
+    const struct dataTypeMap_in *ptr;
 };
 
 int populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile) {
@@ -142,22 +151,22 @@ int populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile) {
 
             if (strcmp("dataType", key) == 0) {
                 xmlNode *subnode;
-                guint16 index = strtol(val, &endptr, 16);
-                assert((index & ~0xffff) == 0 && endptr != val);
+                guint16 index = strtou16(val, &endptr, 16);
+                assert(endptr != val);
                 
                 for (subnode = cur->children; subnode; subnode = subnode->next) {
                     if (subnode->type == XML_ELEMENT_NODE) {
                         /* FIXME cast */
                         struct dataType *type;
-                        gint *hf = epl_type_to_hf((char*)subnode->name);
-                        if (!hf) {
+                        const struct dataTypeMap_in *ptr = epl_type_to_hf((char*)subnode->name);
+                        if (!ptr) {
                             fprintf(stderr, "Skipping unknown type '%s'\n", subnode->name);
                             continue;
                         }
                         type = g_new0(struct dataType, 1);
-                        type->index = index;
-                        type->hf = hf;
-                        g_hash_table_insert(profile->data, &type->index, type);
+                        type->id = index;
+                        type->ptr = ptr;
+                        g_hash_table_insert(profile->data, &type->id, type);
                         continue;
                     }
                 }
@@ -190,20 +199,23 @@ int populate_objectList(xmlNodeSetPtr nodes, void *data) {
                         *val = (char*)attr->children->content;
 
             if (strcmp("index", key) == 0) {
-                obj.index = strtol(val, &endptr, 16);
-                assert((obj.index & ~0xffff) == 0 && endptr != val);
+                obj.index = strtou16(val, &endptr, 16);
+                assert(endptr != val);
 
             } else if (strcmp("name", key) == 0) {
-                obj.name = strdup(val);
+                obj.name = g_strdup(val);
 
             } else if (strcmp("objectType", key) == 0) {
-                obj.type = strtol(val, &endptr, 16);
-                assert((7 <= obj.type && obj.type <= 9) && endptr != val);
+                obj.kind = strtou16(val, &endptr, 16);
+                assert((7 <= obj.kind && obj.kind <= 9) && endptr != val);
 
             } else if (strcmp("dataType", key) == 0) {
-                long index = strtol(val, &endptr, 16);
-                assert(endptr != val);
-                obj.hf = g_hash_table_lookup(profile->data, &index);
+                guint16 id = strtou16(val, &endptr, 16);
+                if (endptr != val) {
+                    struct dataType *type = g_hash_table_lookup(profile->data, &id);
+                    if (type)
+                        obj.type = type->ptr;
+                }
             }
             /*else if (strcmp("PDOmapping", key) == 0) {
                 obj.PDOmapping = get_index(ObjectPDOmapping_tostr, val);

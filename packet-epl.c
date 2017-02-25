@@ -1515,45 +1515,47 @@ static gint hf_epl_pdo_unsigned48 = -1;
 static gint hf_epl_pdo_unsigned56 = -1;
 static gint hf_epl_pdo_unsigned64 = -1;
 
-static struct dataTypeMap_in {
+static const struct dataTypeMap_in {
     const char *name;
     gint *hf;
+    guint encoding;
 } dataTypeMap_in[] = {
-	{ "Boolean", &hf_epl_pdo_boolean },
-	{ "Integer8", &hf_epl_pdo_integer8 },
-	{ "Integer16", &hf_epl_pdo_integer16},
-	{ "Integer32", &hf_epl_pdo_integer32},
-	{ "Unsigned8", &hf_epl_pdo_unsigned8},
-	{ "Unsigned16", &hf_epl_pdo_unsigned16},
-	{ "Unsigned32", &hf_epl_pdo_unsigned32},
-	{ "Real32", &hf_epl_pdo_real32},
-	{ "Visible_String", &hf_epl_pdo_visible_string},
-	{ "Integer24", &hf_epl_pdo_integer24},
-	{ "Real64", &hf_epl_pdo_real64},
-	{ "Integer40", &hf_epl_pdo_integer40},
-	{ "Integer48", &hf_epl_pdo_integer48},
-	{ "Integer56", &hf_epl_pdo_integer56},
-	{ "Integer64", &hf_epl_pdo_integer64},
-	{ "Octet_String", &hf_epl_pdo_octet_string},
-	{ "Unicode_String", &hf_epl_pdo_unicode_string},
-	{ "Time_of_Day", &hf_epl_pdo_time_of_day},
-	{ "Time_Diff", &hf_epl_pdo_time_difference},
-	{ "Domain", &hf_epl_pdo_domain},
-	{ "Unsigned24", &hf_epl_pdo_unsigned24},
-	{ "Unsigned40", &hf_epl_pdo_unsigned40},
-	{ "Unsigned48", &hf_epl_pdo_unsigned48},
-	{ "Unsigned56", &hf_epl_pdo_unsigned56},
-	{ "Unsigned64", &hf_epl_pdo_unsigned64},
-	/*{ "MAC_ADDRESS", &hf_epl_pdo_unsigned24},*/
-	/*{ "IP_ADDRESS", &hf_epl_pdo_unsigned24},*/
-	/*{ "NETTIME", &hf_epl_pdo_unsigned24},*/
+	{ "Boolean", &hf_epl_pdo_boolean, ENC_LITTLE_ENDIAN },
+	{ "Integer8", &hf_epl_pdo_integer8 , ENC_LITTLE_ENDIAN },
+	{ "Integer16", &hf_epl_pdo_integer16, ENC_LITTLE_ENDIAN },
+	{ "Integer32", &hf_epl_pdo_integer32, ENC_LITTLE_ENDIAN },
+	{ "Unsigned8", &hf_epl_pdo_unsigned8, ENC_LITTLE_ENDIAN },
+	{ "Unsigned16", &hf_epl_pdo_unsigned16, ENC_LITTLE_ENDIAN },
+	{ "Unsigned32", &hf_epl_pdo_unsigned32, ENC_LITTLE_ENDIAN },
+	{ "Real32", &hf_epl_pdo_real32, ENC_LITTLE_ENDIAN },
+	{ "Visible_String", &hf_epl_pdo_visible_string, ENC_ASCII },
+	{ "Integer24", &hf_epl_pdo_integer24, ENC_LITTLE_ENDIAN },
+	{ "Real64", &hf_epl_pdo_real64, ENC_LITTLE_ENDIAN },
+	{ "Integer40", &hf_epl_pdo_integer40,  ENC_LITTLE_ENDIAN },
+	{ "Integer48", &hf_epl_pdo_integer48, ENC_LITTLE_ENDIAN },
+	{ "Integer56", &hf_epl_pdo_integer56, ENC_LITTLE_ENDIAN },
+	{ "Integer64", &hf_epl_pdo_integer64, ENC_LITTLE_ENDIAN },
+	{ "Octet_String", &hf_epl_pdo_octet_string, ENC_NA },
+	{ "Unicode_String", &hf_epl_pdo_unicode_string, ENC_UCS_2 },
+	/*{ "Time_of_Day", &hf_epl_pdo_time_of_day, ENC_NA },*/
+	/*{ "Time_Diff", &hf_epl_pdo_time_difference, ENC_NA },*/
+	/*{ "Domain", &hf_epl_pdo_domain, ENC_NA },*/
+	{ "Unsigned24", &hf_epl_pdo_unsigned24, ENC_LITTLE_ENDIAN },
+	{ "Unsigned40", &hf_epl_pdo_unsigned40, ENC_LITTLE_ENDIAN },
+	{ "Unsigned48", &hf_epl_pdo_unsigned48, ENC_LITTLE_ENDIAN },
+	{ "Unsigned56", &hf_epl_pdo_unsigned56, ENC_LITTLE_ENDIAN },
+	{ "Unsigned64", &hf_epl_pdo_unsigned64, ENC_LITTLE_ENDIAN },
+	/*{ "MAC_ADDRESS", &hf_epl_pdo_unsigned24, ENC_NA },*/
+	/*{ "IP_ADDRESS", &hf_epl_pdo_unsigned24, ENC_NA },*/
+	/*{ "NETTIME", &hf_epl_pdo_unsigned24, ENC_NA },*/
 	{ NULL, NULL }
 };
-gint *epl_type_to_hf(const char *name) {
-	struct dataTypeMap_in *entry;
+
+const struct dataTypeMap_in *epl_type_to_hf(const char *name) {
+	const struct dataTypeMap_in *entry;
 	for (entry = dataTypeMap_in; entry->name; entry++) {
 		if (strcmp(name, entry->name) == 0)
-			return entry->hf;
+			return entry;
 	}
 	return NULL;
 }
@@ -1697,6 +1699,7 @@ struct object_mapping {
 		guint16 index;
 		guint8 subindex;
 	} param;
+	struct object *obj;
 	/* in bits */
 	int offset;
 	int len;
@@ -1758,23 +1761,32 @@ static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_t
 
 
 	for (i = 0; i < maps_count; i++) {
-		guint willbe_offset_bits = mappings[i].offset + mappings[i].len;
+		struct object_mapping *map = &mappings[i];
+		guint willbe_offset_bits = map->offset + map->len;
 		proto_tree *psf_tree;
 		proto_item *psf_item, *ti;
 		if (willbe_offset_bits > rem_len * 8) {
 			break;
 		}
 
-		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", mappings[i].name);
+		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", map->name);
 		psf_tree = proto_item_add_subtree(psf_item, ett_epl_pdo);
 
-		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_pdo_index, payload_tvb, 0, 0, mappings[i].param.index, "%04X", mappings[i].param.index);
+		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_pdo_index, payload_tvb, 0, 0, map->param.index, "%04X", map->param.index);
+		if (map->obj)
+			proto_item_append_text (ti, " (%s)", map->obj->name);
 		PROTO_ITEM_SET_GENERATED(ti);
 
-		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_pdo_subindex, payload_tvb, 0, 0, mappings[i].param.subindex, "%02X", mappings[i].param.subindex);
+		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_pdo_subindex, payload_tvb, 0, 0, map->param.subindex, "%02X", map->param.subindex);
 		PROTO_ITEM_SET_GENERATED(ti);
 
-		dissect_epl_payload_fallback(psf_tree, payload_tvb, pinfo, mappings[i].offset / 8, mappings[i].len / 8, msgType);
+		if (map->obj->type) {
+			proto_tree_add_item(psf_tree, *map->obj->type->hf, payload_tvb,
+					map->offset / 8, map->len / 8, map->obj->type->encoding);
+			// FIXME: check if there's more data, if so call dissect_epl_payload
+		} else {
+			dissect_epl_payload_fallback(psf_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType);
+		}
 
 		off = willbe_offset_bits / 8;
 	}
@@ -1823,9 +1835,9 @@ static void iterator(gpointer key, gpointer value, gpointer user_data) {
 }
 void debug_me_hard(void) {
 	struct profile **profile = wmem_array_get_raw(CN_base_profiles);
-	size_t count = wmem_array_get_count(CN_base_profiles);
+	size_t n = wmem_array_get_count(CN_base_profiles);
 	size_t i;
-	for (i = 0; i < count; i++)
+	for (i = 0; i < n; i++)
 		g_hash_table_foreach(profile[i]->objects, (GHFunc)iterator, &i);
 }
 #endif
@@ -3621,8 +3633,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 		if((idx == EPL_SOD_PDO_TX_MAPP && subindex > entries) || (idx == EPL_SOD_PDO_RX_MAPP && subindex > entries))
 		{
 			proto_item *ti;
-			struct object_mapping map;
-			struct object *obj;
+			struct object_mapping map = {0};
 			struct profile **profiles;
 			wmem_strbuf_t *name;
 			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
@@ -3636,13 +3647,13 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 
 			/* look up index in registered profiles */
 			profiles = wmem_array_get_raw(convo->profiles.CN);
-			obj = object_lookup(
+			map.obj = object_lookup(
 					profiles,
 					wmem_array_get_count(convo->profiles.CN),
 					idx
 			);
 
-			if (obj) proto_item_append_text (ti, " (%s)", obj->name);
+			if (map.obj) proto_item_append_text (ti, " (%s)", map.obj->name);
 
 			//TODO: remove 
 			map.param.index = idx;

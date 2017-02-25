@@ -8,10 +8,16 @@
 
 #include <glib.h>
 
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wmissing-braces"
+#endif
+
 gboolean epl_g_int16_equal(gconstpointer v1, gconstpointer v2);
 guint epl_g_int16_hash(gconstpointer v);
 
-gint *epl_type_to_hf(const char *name);
+struct dataTypeMap_in;
+const struct dataTypeMap_in *epl_type_to_hf(const char *name);
 
 struct profile {
 	guint16 id;
@@ -25,9 +31,9 @@ struct subobject {
 };
 struct object {
     guint16 index;
-    guint8 type;
+    guint8 kind; /* object type, is it aggregate or plain and so, FIXME needs better name */
     const char *name;
-    gint *hf;
+    const struct dataTypeMap_in *type;
     GArray *subindices;
 };
 
