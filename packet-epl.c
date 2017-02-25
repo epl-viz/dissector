@@ -33,6 +33,8 @@
  *
  *                     - Ahmad Fatoum <ahmad@a3f.at>
  *                       - Converted into plugin for easier development
+ *                       - ObjectMappings now used for dissecting PDOs
+ *                       - XDD files can be read for name/type information
  * A dissector for:
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
@@ -3422,6 +3424,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 	proto_tree *psf_tree, *payload_tree;
 	const gchar *index_str, *sub_str, *sub_index_str;
 	fragment_head *frag_msg = NULL;
+	struct object *obj = NULL;
 
 	/* get the current frame number */
 	frame = pinfo->num;
@@ -3431,7 +3434,6 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 
 		if (segmented <= EPL_ASND_SDO_CMD_SEGMENTATION_INITIATE_TRANSFER)
 		{
-			struct object *obj;
 			struct profile **profiles;
 
 			/* get index offset */
@@ -3633,9 +3635,9 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 		if((idx == EPL_SOD_PDO_TX_MAPP && subindex > entries) || (idx == EPL_SOD_PDO_RX_MAPP && subindex > entries))
 		{
 			proto_item *ti;
-			struct object_mapping map = {0};
 			struct profile **profiles;
 			wmem_strbuf_t *name;
+			struct object_mapping map = {0};
 			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
 			name = wmem_strbuf_new(wmem_file_scope(), NULL);
 
@@ -3678,6 +3680,12 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			map.name = wmem_strbuf_finalize(name);
 
 			add_object_mapping(mappings, &map);
+		}
+		else if (obj && obj->type)
+		{
+			proto_tree_add_item(epl_tree, *obj->type->hf, tvb,
+					offset, size, obj->type->encoding);
+			offset += size;
 		}
 		else
 		{
