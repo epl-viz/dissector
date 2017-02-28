@@ -3464,11 +3464,11 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 				index_str = rval_to_str_const(idx, sod_cmd_str, "unknown");
 				/* get index string value */
 				sod_index = str_to_val(index_str, sod_cmd_str_val, error);
-				/* get subindex string */
-				sub_index_str = val_to_str_ext_const(idx, &sod_cmd_no_sub, "unknown");
-				/* get subindex string value*/
-				nosub = str_to_val(sub_index_str, sod_cmd_str_no_sub,error);
 			}
+			/* get subindex string */
+			sub_index_str = val_to_str_ext_const(idx, &sod_cmd_no_sub, "unknown");
+			/* get subindex string value*/
+			nosub = str_to_val(sub_index_str, sod_cmd_str_no_sub,error);
 			offset += 2;
 
 			/* get subindex offset */
