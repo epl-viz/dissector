@@ -1493,11 +1493,14 @@ static gint hf_epl_pdo_subindex        = -1;
 static gint hf_epl_pdo_boolean	       = -1;
 static gint hf_epl_pdo_integer8        = -1;
 static gint hf_epl_pdo_integer16       = -1;
+static gint hf_epl_pdo_integer24        = -1;
 static gint hf_epl_pdo_integer32       = -1;
-static gint hf_epl_pdo_unsigned8       = -1;
-static gint hf_epl_pdo_unsigned16      = -1;
-static gint hf_epl_pdo_unsigned32      = -1;
+static gint hf_epl_pdo_integer40       = -1;
+static gint hf_epl_pdo_integer48       = -1;
+static gint hf_epl_pdo_integer56       = -1;
+static gint hf_epl_pdo_integer64       = -1;
 static gint hf_epl_pdo_real32          = -1;
+static gint hf_epl_pdo_real64          = -1;
 static gint hf_epl_pdo_visible_string  = -1;
 static gint hf_epl_pdo_octet_string    = -1;
 static gint hf_epl_pdo_unicode_string  = -1;
@@ -1509,17 +1512,11 @@ static gint hf_epl_pdo_domain     = -1;
 static gint hf_epl_pdo_mac        = -1;
 static gint hf_epl_pdo_ipv4       = -1;
 
-static gint hf_epl_pdo_integer24  = -1;
-static gint hf_epl_pdo_real64     = -1;
-static gint hf_epl_pdo_integer40  = -1;
-static gint hf_epl_pdo_integer48  = -1;
-static gint hf_epl_pdo_integer56  = -1;
-static gint hf_epl_pdo_integer64  = -1;
-static gint hf_epl_pdo_unsigned24 = -1;
-static gint hf_epl_pdo_unsigned40 = -1;
-static gint hf_epl_pdo_unsigned48 = -1;
-static gint hf_epl_pdo_unsigned56 = -1;
-static gint hf_epl_pdo_unsigned64 = -1;
+#define EPL_PDO_TYPE_COUNT 8
+static gint hf_epl_pdo_unsigned[EPL_PDO_TYPE_COUNT]
+	= {  -1, -1, -1, -1, -1, -1, -1, -1 };
+#define SIZE_TO_UNSIGNED_HF(size) ((0 < (size) && (size) <= EPL_PDO_TYPE_COUNT) \
+		? &hf_epl_pdo_unsigned[(size) - 1] : NULL)
 
 static const struct dataTypeMap_in {
     const char *name;
@@ -1529,18 +1526,15 @@ static const struct dataTypeMap_in {
 	{ "Boolean", &hf_epl_pdo_boolean, ENC_LITTLE_ENDIAN },
 	{ "Integer8", &hf_epl_pdo_integer8 , ENC_LITTLE_ENDIAN },
 	{ "Integer16", &hf_epl_pdo_integer16, ENC_LITTLE_ENDIAN },
-	{ "Integer32", &hf_epl_pdo_integer32, ENC_LITTLE_ENDIAN },
-	{ "Unsigned8", &hf_epl_pdo_unsigned8, ENC_LITTLE_ENDIAN },
-	{ "Unsigned16", &hf_epl_pdo_unsigned16, ENC_LITTLE_ENDIAN },
-	{ "Unsigned32", &hf_epl_pdo_unsigned32, ENC_LITTLE_ENDIAN },
-	{ "Real32", &hf_epl_pdo_real32, ENC_LITTLE_ENDIAN },
-	{ "Visible_String", &hf_epl_pdo_visible_string, ENC_ASCII },
 	{ "Integer24", &hf_epl_pdo_integer24, ENC_LITTLE_ENDIAN },
-	{ "Real64", &hf_epl_pdo_real64, ENC_LITTLE_ENDIAN },
+	{ "Integer32", &hf_epl_pdo_integer32, ENC_LITTLE_ENDIAN },
 	{ "Integer40", &hf_epl_pdo_integer40,  ENC_LITTLE_ENDIAN },
 	{ "Integer48", &hf_epl_pdo_integer48, ENC_LITTLE_ENDIAN },
 	{ "Integer56", &hf_epl_pdo_integer56, ENC_LITTLE_ENDIAN },
 	{ "Integer64", &hf_epl_pdo_integer64, ENC_LITTLE_ENDIAN },
+	{ "Real32", &hf_epl_pdo_real32, ENC_LITTLE_ENDIAN },
+	{ "Real64", &hf_epl_pdo_real64, ENC_LITTLE_ENDIAN },
+	{ "Visible_String", &hf_epl_pdo_visible_string, ENC_ASCII },
 	{ "Octet_String", &hf_epl_pdo_octet_string, ENC_NA },
 	{ "Unicode_String", &hf_epl_pdo_unicode_string, ENC_UCS_2 },
 	/*{ "Time_of_Day", &hf_epl_pdo_time_of_day, ENC_NA },*/
@@ -1551,11 +1545,15 @@ static const struct dataTypeMap_in {
 	{ "MAC_ADDRESS", &hf_epl_pdo_mac, ENC_BIG_ENDIAN },
 	{ "IP_ADDRESS", &hf_epl_pdo_ipv4, ENC_BIG_ENDIAN },
 
-	{ "Unsigned24", &hf_epl_pdo_unsigned24, ENC_LITTLE_ENDIAN },
-	{ "Unsigned40", &hf_epl_pdo_unsigned40, ENC_LITTLE_ENDIAN },
-	{ "Unsigned48", &hf_epl_pdo_unsigned48, ENC_LITTLE_ENDIAN },
-	{ "Unsigned56", &hf_epl_pdo_unsigned56, ENC_LITTLE_ENDIAN },
-	{ "Unsigned64", &hf_epl_pdo_unsigned64, ENC_LITTLE_ENDIAN },
+	{ "Unsigned8",  SIZE_TO_UNSIGNED_HF(1), ENC_LITTLE_ENDIAN },
+	{ "Unsigned16", SIZE_TO_UNSIGNED_HF(2), ENC_LITTLE_ENDIAN },
+	{ "Unsigned24", SIZE_TO_UNSIGNED_HF(3), ENC_LITTLE_ENDIAN },
+	{ "Unsigned32", SIZE_TO_UNSIGNED_HF(4), ENC_LITTLE_ENDIAN },
+	{ "Unsigned40", SIZE_TO_UNSIGNED_HF(5), ENC_LITTLE_ENDIAN },
+	{ "Unsigned48", SIZE_TO_UNSIGNED_HF(6), ENC_LITTLE_ENDIAN },
+	{ "Unsigned56", SIZE_TO_UNSIGNED_HF(7), ENC_LITTLE_ENDIAN },
+	{ "Unsigned64", SIZE_TO_UNSIGNED_HF(8), ENC_LITTLE_ENDIAN },
+
 	{ NULL, NULL }
 };
 
@@ -1769,10 +1767,11 @@ static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_t
 
 
 	for (i = 0; i < maps_count; i++) {
-		struct object_mapping *map = &mappings[i];
-		guint willbe_offset_bits = map->offset + map->len;
 		proto_tree *psf_tree;
 		proto_item *psf_item, *ti;
+		struct object_mapping *map = &mappings[i];
+		guint willbe_offset_bits = map->offset + map->len;
+		
 		if (willbe_offset_bits > rem_len * 8) {
 			break;
 		}
@@ -1791,10 +1790,11 @@ static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_t
 		if (map->obj && map->obj->type) {
 			proto_tree_add_item(psf_tree, *map->obj->type->hf, payload_tvb,
 					map->offset / 8, map->len / 8, map->obj->type->encoding);
-			// FIXME: check if there's more data, if so call dissect_epl_payload
-		} else {
-			dissect_epl_payload_fallback(psf_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType);
+		} else { 
+			dissect_epl_payload_fallback(psf_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType); 
 		}
+		// FIXME: check if there's more data, if so call dissect_epl_payload 
+
 
 		off = willbe_offset_bits / 8;
 	}
@@ -2307,13 +2307,19 @@ dissect_epl_payload_fallback(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *p
 			expert_add_info(pinfo, item, &ei_real_length_differs );
 		}
 
-		if ( ! dissector_try_heuristic(heur_epl_data_subdissector_list, payload_tvb, pinfo, epl_tree, &hdtbl_entry, &msgType))
-			call_data_dissector(payload_tvb, pinfo, epl_tree);
+		if ( ! dissector_try_heuristic(heur_epl_data_subdissector_list, payload_tvb, pinfo, epl_tree, &hdtbl_entry, &msgType)) {
+			/* We don't know the type, so let's use appropriate unsignedX */
+			gint *hf = SIZE_TO_UNSIGNED_HF(len);
+			if (hf) {
+				proto_tree_add_item(epl_tree, *hf, payload_tvb, 0, len, ENC_LITTLE_ENDIAN);
+			} else {
+				call_data_dissector(payload_tvb, pinfo, epl_tree);
+			}
+		}
 
-		off += len;
 	}
 
-	return off;
+	return off + len;
 }
 
 gint
@@ -4907,120 +4913,122 @@ proto_register_epl(void)
 		},
 
 		{ &hf_epl_pdo_boolean,
-			{ "Data", "epl-xdd.pdo.boolean",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_BOOLEAN, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer8,
-			{ "Data", "epl-xdd.pdo.integer8",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_INT8, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer16,
-			{ "Data", "epl-xdd.pdo.integer16",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_INT16, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
+		{ &hf_epl_pdo_integer24,
+			{ "Data", "epl-xdd.pdo.data",
+				FT_INT24, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
 		{ &hf_epl_pdo_integer32,
-			{ "Data", "epl-xdd.pdo.integer32",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_INT32, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_unsigned8,
-			{ "Data", "epl-xdd.pdo.unsigned8",
-				FT_UINT8, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		{ &hf_epl_pdo_integer40,
+			{ "Data", "epl-xdd.pdo.data",
+				FT_INT40, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_unsigned16,
-			{ "Data", "epl-xdd.pdo.unsigned16",
-				FT_UINT16, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		{ &hf_epl_pdo_integer48,
+			{ "Data", "epl-xdd.pdo.data",
+				FT_INT48, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_unsigned32,
-			{ "Data", "epl-xdd.pdo.unsigned32",
-				FT_UINT32, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		{ &hf_epl_pdo_integer56,
+			{ "Data", "epl-xdd.pdo.data",
+				FT_INT56, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
+		{ &hf_epl_pdo_integer64,
+			{ "Data", "epl-xdd.pdo.data",
+				FT_INT64, BASE_DEC, NULL, 0x00, NULL, HFILL }
+		},
+
 		{ &hf_epl_pdo_real32,
-			{ "Data", "epl-xdd.pdo.real32",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_FLOAT, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
+		{ &hf_epl_pdo_real64,
+			{ "Data", "epl-xdd.pdo.data",
+				FT_DOUBLE, BASE_NONE, NULL, 0x00, NULL, HFILL }
+		},
+
+		{ SIZE_TO_UNSIGNED_HF(1),
+			{ "Data", "epl-xdd.pdo.data",
+				FT_UINT8, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ SIZE_TO_UNSIGNED_HF(2),
+			{ "Data", "epl-xdd.pdo.data",
+				FT_UINT16, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ SIZE_TO_UNSIGNED_HF(3),
+			{ "Data", "epl-xdd.pdo.data",
+				FT_UINT24, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ SIZE_TO_UNSIGNED_HF(4),
+			{ "Data", "epl-xdd.pdo.data",
+				FT_UINT32, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ SIZE_TO_UNSIGNED_HF(5),
+			{ "Data", "epl-xdd.pdo.data",
+				FT_UINT40, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ SIZE_TO_UNSIGNED_HF(6),
+			{ "Data", "epl-xdd.pdo.data",
+				FT_UINT48, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ SIZE_TO_UNSIGNED_HF(7),
+			{ "Data", "epl-xdd.pdo.data",
+				FT_UINT56, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ SIZE_TO_UNSIGNED_HF(8),
+			{ "Data", "epl-xdd.pdo.data",
+				FT_UINT64, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
+		},
+
 		{ &hf_epl_pdo_visible_string,
-			{ "Data", "epl-xdd.pdo.string",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_STRING, STR_ASCII, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_octet_string,
-			{ "Data", "epl-xdd.pdo.string",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_BYTES, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_unicode_string,
-			{ "Data", "epl-xdd.pdo.string",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_STRING, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 #if 0
 		{ &hf_epl_pdo_time_of_day, /* not 1:1 */
-			{ "Data", "epl-xdd.pdo.time_of_day",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_time_difference, /* not 1:1 */
-			{ "Data", "epl-xdd.pdo.time_difference",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_RELATIVE_TIME, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 #endif
 		{ &hf_epl_pdo_nettime,
-			{ "Data", "epl-xdd.pdo.nettime",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0x0, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_domain,
-			{ "Data", "epl-xdd.pdo.domain",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_BYTES, BASE_ALLOW_ZERO, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_mac,
-			{ "Data", "epl-xdd.pdo.mac",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_ETHER, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_ipv4,
-			{ "Data", "epl-xdd.pdo.ip",
+			{ "Data", "epl-xdd.pdo.data",
 				FT_BYTES, BASE_NONE, NULL, 0x00, NULL, HFILL }
-		},
-
-		{ &hf_epl_pdo_integer24,
-			{ "Data", "epl-xdd.pdo.integer24",
-				FT_INT24, BASE_DEC, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_real64,
-			{ "Data", "epl-xdd.pdo.real64",
-				FT_DOUBLE, BASE_NONE, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_integer40,
-			{ "Data", "epl-xdd.pdo.integer40",
-				FT_INT40, BASE_DEC, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_integer48,
-			{ "Data", "epl-xdd.pdo.integer48",
-				FT_INT48, BASE_DEC, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_integer56,
-			{ "Data", "epl-xdd.pdo.integer56",
-				FT_INT56, BASE_DEC, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_integer64,
-			{ "Data", "epl-xdd.pdo.integer64",
-				FT_INT64, BASE_DEC, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_unsigned24,
-			{ "Data", "epl-xdd.pdo.unsigned24",
-				FT_UINT24, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_unsigned40,
-			{ "Data", "epl-xdd.pdo.unsigned40",
-				FT_UINT40, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_unsigned48,
-			{ "Data", "epl-xdd.pdo.unsigned48",
-				FT_UINT48, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_unsigned56,
-			{ "Data", "epl-xdd.pdo.unsigned56",
-				FT_UINT56, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
-		},
-		{ &hf_epl_pdo_unsigned64,
-			{ "Data", "epl-xdd.pdo.unsigned64",
-				FT_UINT64, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
-		},
+		}
 	};
 
 	/* Setup protocol subtree array */
