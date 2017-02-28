@@ -1678,8 +1678,8 @@ struct object *profile_object_add(struct profile *profile, guint16 index) {
 }
 static void install_default_profiles(void) {
 	struct profile *ds401 = xdd_load(401, "/Users/a3f/pse/wireshark/plugins/epl_plus_xdd/xdd/401.xdc");
-
-	wmem_array_append_one(CN_base_profiles, ds401);
+	if (ds401) 
+		wmem_array_append_one(CN_base_profiles, ds401);
 }
 
 static address convo_mac;
@@ -1788,7 +1788,7 @@ static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_t
 		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_pdo_subindex, payload_tvb, 0, 0, map->param.subindex, "%02X", map->param.subindex);
 		PROTO_ITEM_SET_GENERATED(ti);
 
-		if (map->obj->type) {
+		if (map->obj && map->obj->type) {
 			proto_tree_add_item(psf_tree, *map->obj->type->hf, payload_tvb,
 					map->offset / 8, map->len / 8, map->obj->type->encoding);
 			// FIXME: check if there's more data, if so call dissect_epl_payload

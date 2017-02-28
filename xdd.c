@@ -60,11 +60,11 @@ struct xpath {
 
 struct profile *xdd_load(guint16 id, const char *xml_file) {
     /*int ret;*/
-    struct profile *profile;
+    struct profile *profile = NULL;
     xmlXPathContextPtr xpathCtx = NULL;
     xmlDoc *doc = NULL;
-    struct namespace *ns;
-    struct xpath *xpath;
+    struct namespace *ns = NULL;
+    struct xpath *xpath = NULL;
 
     /* Load XML document */
     doc = xmlParseFile(xml_file);
