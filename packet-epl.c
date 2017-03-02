@@ -58,6 +58,7 @@
 #include "config.h"
 
 #include "packet-epl.h"
+#include "xdd.h"
 
 #include <epan/conversation.h>
 #include <epan/packet.h>
@@ -68,20 +69,19 @@
 #include <epan/proto_data.h>
 #include <epan/uat.h>
 #include <glib.h>
-#include "xdd.h"
 // TODO: remove this 
 #include <stdio.h>
 
 /* User Access Table */
 struct profile_uat_assoc {
 	gint DeviceType;
-	char* path;
+	char *path;
 };
 
-static void* profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
+static void *profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
 static void profile_uat_free_cb(void *r);
 static void profile_parse_uat(void);
-static gboolean profile_uat_fld_fileopen_chk_cb(void* r _U_, const char* p, guint len _U_, const void* u1 _U_, const void* u2 _U_, char** err);
+static gboolean profile_uat_fld_fileopen_chk_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
 
 UAT_DEC_CB_DEF(profile_list_uats, DeviceType, struct profile_uat_assoc)
 UAT_FILENAME_CB_DEF(profile_list_uats, path, struct profile_uat_assoc)
@@ -1253,7 +1253,7 @@ static gint dissect_epl_preq(struct epl_convo *convo, proto_tree *epl_tree, tvbu
 static gint dissect_epl_pres(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
 static gint dissect_epl_soa(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
 
-static gint dissect_epl_asnd_ires(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
+static gint dissect_epl_asnd_ires(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
 static gint dissect_epl_asnd_sres(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
 static gint dissect_epl_asnd_nmtcmd(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_asnd_nmtreq(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
@@ -1759,7 +1759,14 @@ static guint add_object_mapping(wmem_array_t *arr, struct object_mapping *mappin
 	return len + 1;
 }
 struct epl_convo {
-	guint8 cn;
+	guint8 CN;
+
+	guint32 ResponseTime;
+	guint16 DeviceType;
+	guint32 VendorId;
+	guint32 ProductCode;
+
+
 	wmem_array_t *TPDO; /* CN->MN */
 	wmem_array_t *RPDO; /* MN->CN */
 	struct {
@@ -1768,7 +1775,8 @@ struct epl_convo {
 	} profiles;
 };
 
-static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint offset, guint len, guint8 msgType)
+static int
+call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint offset, guint len, guint8 msgType)
 {
 	// FIXME: non 8-bit-multiple-data!!!
 	wmem_array_t *mapping = msgType == EPL_PRES ? convo->TPDO : convo->RPDO;
@@ -1826,7 +1834,8 @@ static int call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_t
 	return offset + len;
 }
 
-static struct epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
+static struct
+epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 {
 	struct epl_convo *convo;
 	conversation_t * epan_conversation = find_or_create_conversation_epl(pinfo, cn_addr);
@@ -1836,7 +1845,7 @@ static struct epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 	if (convo == NULL)
 	{
 		convo = wmem_new(wmem_file_scope(), struct epl_convo);
-		convo->cn = cn_addr;
+		convo->CN = cn_addr;
 		convo->TPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
 		convo->RPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
 
@@ -1868,7 +1877,8 @@ void debug_me_hard(void) {
 		g_hash_table_foreach(profile[i]->objects, (GHFunc)iterator, &i);
 }
 #endif
-static struct object *object_lookup(struct profile **profiles, size_t profile_count, guint16 index)
+static struct object *
+object_lookup(struct profile **profiles, size_t profile_count, guint16 index)
 {
 	struct object *obj = NULL;
 	size_t i;
@@ -2080,6 +2090,7 @@ elp_version( gchar *result, guint32 version )
 static int
 dissect_eplpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean udpencap)
 {
+	struct epl_convo *convo;
 	guint8 epl_mtyp, epl_src, epl_dest;
 	const  gchar *src_str, *dest_str;
 	/* static epl_info_t mi; */
@@ -2137,7 +2148,7 @@ dissect_eplpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean udp
 	cn_addr = src_str  == addr_str_cn ? epl_src
 		: dest_str == addr_str_cn ? epl_dest
 		: 0;
-	struct epl_convo *convo = epl_get_convo(pinfo, cn_addr);
+	convo = epl_get_convo(pinfo, cn_addr);
 
 
 
@@ -2617,7 +2628,7 @@ dissect_epl_asnd(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 	switch (svid)
 	{
 		case EPL_ASND_IDENTRESPONSE:
-			offset = dissect_epl_asnd_ires(epl_tree, tvb, pinfo, epl_src, offset);
+			offset = dissect_epl_asnd_ires(convo, epl_tree, tvb, pinfo, epl_src, offset);
 			break;
 
 		case EPL_ASND_STATUSRESPONSE:
@@ -2691,7 +2702,7 @@ dissect_epl_ainv(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 	switch (svid)
 	{
 		case EPL_ASND_IDENTRESPONSE:
-			offset = dissect_epl_asnd_ires(epl_tree, tvb, pinfo, epl_src, offset);
+			offset = dissect_epl_asnd_ires(convo, epl_tree, tvb, pinfo, epl_src, offset);
 			break;
 
 		case EPL_ASND_STATUSRESPONSE:
@@ -2848,9 +2859,9 @@ dissect_epl_asnd_nmtcmd(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo,
 
 
 gint
-dissect_epl_asnd_ires(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset)
+dissect_epl_asnd_ires(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset)
 {
-	guint16 profile,additional;
+	guint16 additional;
 	guint32 epl_asnd_identresponse_ipa, epl_asnd_identresponse_snm, epl_asnd_identresponse_gtw;
 	proto_item  *ti_feat;
 	proto_tree  *epl_feat_tree;
@@ -2911,21 +2922,24 @@ dissect_epl_asnd_ires(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, g
 	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_pos, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 	offset += 2;
 
+	convo->ResponseTime = tvb_get_letohl(tvb, offset);
 	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_rst, tvb, offset, 4, ENC_LITTLE_ENDIAN);
 	offset += 6;
 
-	profile    = tvb_get_letohs(tvb, offset);
-	additional = tvb_get_letohs(tvb, offset+2);
+	convo->DeviceType = tvb_get_letohs(tvb, offset);
+	additional 	  = tvb_get_letohs(tvb, offset+2);
 	proto_tree_add_string_format_value(epl_tree, hf_epl_asnd_identresponse_dt, tvb, offset,
 								4, "", "Profile %d (%s), Additional Information: 0x%4.4X",
-								profile, val_to_str_const(profile, epl_device_profiles, "Unknown Profile"), additional);
+								convo->DeviceType, val_to_str_const(convo->DeviceType, epl_device_profiles, "Unknown Profile"), additional);
 
 	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_profile, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 	offset += 4;
 
+	convo->VendorId = tvb_get_letohl(tvb, offset);
 	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_vid, tvb, offset, 4, ENC_LITTLE_ENDIAN);
 	offset += 4;
 
+	convo->ProductCode = tvb_get_letohl(tvb, offset);
 	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_productcode, tvb, offset, 4, ENC_LITTLE_ENDIAN);
 	offset += 4;
 
@@ -2968,7 +2982,7 @@ dissect_epl_asnd_ires(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, g
 	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_vex2, tvb, offset, 48, ENC_NA);
 	offset += 48;
 
-	col_append_str(pinfo->cinfo, COL_INFO, val_to_str(profile, epl_device_profiles, "Device Profile %d"));
+	col_append_str(pinfo->cinfo, COL_INFO, val_to_str(convo->DeviceType, epl_device_profiles, "Device Profile %d"));
 
 	return offset;
 }
@@ -5206,7 +5220,7 @@ profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_)
 
 
 static gboolean
-profile_uat_fld_fileopen_chk_cb(void* r _U_, const char* p, guint len _U_, const void* u1 _U_, const void* u2 _U_, char** err)
+profile_uat_fld_fileopen_chk_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err)
 {
 #if 0
 	ws_statb64 st;
