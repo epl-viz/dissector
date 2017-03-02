@@ -7,6 +7,7 @@
 #define WIRESHARK_PACKET_EPL_H_
 
 #include <glib.h>
+#include <epan/wmem/wmem.h>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
@@ -21,8 +22,9 @@ const struct dataTypeMap_in *epl_type_to_hf(const char *name);
 
 struct profile {
 	guint16 id;
-	GHashTable *objects;
-    void *data;
+	wmem_map_t *objects;
+	wmem_allocator_t *scope;
+	void *data;
 };
 
 struct subobject {
@@ -30,15 +32,15 @@ struct subobject {
 	const char *name;
 };
 struct object {
-    guint16 index;
-    guint8 kind; /* object type, is it aggregate or plain and so, FIXME needs better name */
-    const char *name;
-    const struct dataTypeMap_in *type;
-    GArray *subindices;
+	guint16 index;
+	guint8 kind; /* object type, is it aggregate or plain and so, FIXME needs better name */
+	char name[64];
+	const struct dataTypeMap_in *type;
+	GArray *subindices;
 };
 
 
-struct profile *profile_new(guint16 id);
+struct profile *profile_new(wmem_allocator_t *scope, guint16 id);
 struct object *profile_object_add(struct profile *profile, guint16 index);
 
 #endif

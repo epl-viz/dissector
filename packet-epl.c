@@ -1665,43 +1665,57 @@ static reassembly_table epl_reassembly_table;
 #define EPL_TO_LEGACY_ETHERNET_ROUTER_NODEID    254
 #define EPL_BROADCAST_NODEID                    255
 
-gboolean epl_g_int16_equal(gconstpointer v1, gconstpointer v2) {
+gboolean
+epl_g_int16_equal(gconstpointer v1, gconstpointer v2)
+{
 	return *(guint16*)v1 == *(guint16*)v2;
 }
 
-guint epl_g_int16_hash(gconstpointer v) {
+guint
+epl_g_int16_hash(gconstpointer v)
+{
 	return *(guint16*)v;
 }
 
-static GHashTable *epl_profiles;
+static wmem_map_t *epl_profiles;
 static wmem_array_t *CN_base_profiles, *MN_base_profiles;
 
-struct profile *profile_new(guint16 id) {
-	struct profile *profile = g_new0(struct profile, 1);
+struct profile *
+profile_new(wmem_allocator_t *scope, guint16 id)
+{
+	struct profile *profile = wmem_new0(scope, struct profile);
 
-	profile->id = id;
-	profile->objects = g_hash_table_new(epl_g_int16_hash, epl_g_int16_equal);
+	profile->id      = id;
+	profile->scope   = scope;
+	profile->objects = wmem_map_new(scope, epl_g_int16_hash, epl_g_int16_equal);
 
-	g_hash_table_insert(epl_profiles, &profile->id, profile);
+	wmem_map_insert(epl_profiles, &profile->id, profile);
 	return profile;
 }
-struct object *profile_object_add(struct profile *profile, guint16 index) {
-	struct object *object = g_new0(struct object, 1);
+
+struct object *
+profile_object_add(struct profile *profile, guint16 index)
+{
+	struct object *object = wmem_new0(profile->scope, struct object);
 
 	object->index = index;
 
-	g_hash_table_insert(profile->objects, &object->index, object);
+	wmem_map_insert(profile->objects, &object->index, object);
 	return object;
 }
-static void install_default_profiles(void) {
-	struct profile *ds401 = xdd_load(401, "/Users/a3f/pse/wireshark/plugins/epl_plus_xdd/xdd/401.xdc");
+
+static void
+install_default_profiles(void) {
+	struct profile *ds401 = xdd_load(wmem_file_scope(), 401,
+			"/Users/a3f/pse/wireshark/plugins/epl_plus_xdd/xdd/401.xdc");
 	if (ds401) 
 		wmem_array_append_one(CN_base_profiles, ds401);
 }
 
 static address convo_mac;
 
-static conversation_t *find_or_create_conversation_epl(packet_info *pinfo, guint8 cn_addr) {
+static conversation_t *
+find_or_create_conversation_epl(packet_info *pinfo, guint8 cn_addr) {
 	conversation_t *convo;
 
 	/* I2C port is also single octet wide */
@@ -1731,18 +1745,21 @@ struct object_mapping {
 	/* info */
 	const char *name;
 };
-static struct object_mapping *get_object_mappings(wmem_array_t *arr, guint *len) {
+static struct object_mapping *
+get_object_mappings(wmem_array_t *arr, guint *len) {
 	*len = wmem_array_get_count(arr);
 	return wmem_array_get_raw(arr);
 }
-int object_mapping_cmp (const void *a_, const void *b_) {
+int
+object_mapping_cmp(const void *a_, const void *b_) {
 	const struct object_mapping *a = a_, *b = b_;
 
 	if (a->offset < b->offset) return -1;
 	if (a->offset > b->offset) return +1;
 	return 0;
 }
-static guint add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping) {
+static guint
+add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping) {
 	/* A bit ineffecient (looping backwards would be better), but it's acyclic anyway */
 	guint i, len;
 	struct object_mapping *mappings = get_object_mappings(arr, &len);
@@ -1865,16 +1882,18 @@ epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 
 // TODO: remove this
 #if 1
-static void iterator(gpointer key, gpointer value, gpointer user_data) {
+static void
+iterator(gpointer key, gpointer value, gpointer user_data) {
 	struct object *obj = value;
 	printf("%d. [%d/%x => '%s']\n", *(int*)user_data, *(gint*)key, obj->index, obj->name);
 }
-void debug_me_hard(void) {
+void
+debug_me_hard(void) {
 	struct profile **profile = wmem_array_get_raw(CN_base_profiles);
 	size_t n = wmem_array_get_count(CN_base_profiles);
 	size_t i;
 	for (i = 0; i < n; i++)
-		g_hash_table_foreach(profile[i]->objects, (GHFunc)iterator, &i);
+		wmem_map_foreach(profile[i]->objects, (GHFunc)iterator, &i);
 }
 #endif
 static struct object *
@@ -1885,7 +1904,7 @@ object_lookup(struct profile **profiles, size_t profile_count, guint16 index)
 
 	for (i = 0; i < profile_count; i++) {
 		struct profile *profile = profiles[i];
-	            if ((obj = g_hash_table_lookup(profile->objects, &index))) {
+	            if ((obj = wmem_map_lookup(profile->objects, &index))) {
 			break;
 		}
 	}
@@ -2028,9 +2047,9 @@ setup_dissector(void)
 	reassembly_table_init(&epl_reassembly_table, &addresses_reassembly_table_functions);
 
 	/* init device profiles support */
-	epl_profiles = g_hash_table_new(epl_g_int16_hash, epl_g_int16_equal);
-	CN_base_profiles = wmem_array_new(wmem_file_scope(), sizeof (struct profile*));
-	MN_base_profiles = wmem_array_new(wmem_file_scope(), sizeof (struct profile*));
+	epl_profiles = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
+	CN_base_profiles = wmem_array_new(wmem_epan_scope(), sizeof (struct profile*));
+	MN_base_profiles = wmem_array_new(wmem_epan_scope(), sizeof (struct profile*));
 
 	xdd_init();
 
