@@ -66,10 +66,25 @@
 #include <epan/expert.h>
 #include <epan/reassemble.h>
 #include <epan/proto_data.h>
+#include <epan/uat.h>
 #include <glib.h>
 #include "xdd.h"
 // TODO: remove this 
 #include <stdio.h>
+
+/* User Access Table */
+struct profile_uat_assoc {
+	gint DeviceType;
+	char* path;
+};
+
+static void* profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
+static void profile_uat_free_cb(void *r);
+static void profile_parse_uat(void);
+static gboolean profile_uat_fld_fileopen_chk_cb(void* r _U_, const char* p, guint len _U_, const void* u1 _U_, const void* u2 _U_, char** err);
+
+UAT_DEC_CB_DEF(profile_list_uats, DeviceType, struct profile_uat_assoc)
+UAT_FILENAME_CB_DEF(profile_list_uats, path, struct profile_uat_assoc)
 
 void proto_register_epl(void);
 void proto_reg_handoff_epl(void);
@@ -1259,6 +1274,10 @@ static const gchar* decode_epl_address(guchar adr);
 /* Initialize the protocol and registered fields */
 static gint proto_epl            = -1;
 
+static uat_t *profile_uat = NULL;
+static struct profile_uat_assoc *profile_list_uats = NULL;
+static guint nprofile_uat = 0;
+
 // FIXME: remove these, when no longer needed for debugging
 static gint hf_epl_convo         = -1;
 static gint hf_epl_info         = -1;
@@ -1490,10 +1509,10 @@ static gint hf_epl_pdo                 = -1;
 static gint hf_epl_pdo_index           = -1;
 static gint hf_epl_pdo_subindex        = -1;
 
-static gint hf_epl_pdo_boolean	       = -1;
+static gint hf_epl_pdo_boolean         = -1;
 static gint hf_epl_pdo_integer8        = -1;
 static gint hf_epl_pdo_integer16       = -1;
-static gint hf_epl_pdo_integer24        = -1;
+static gint hf_epl_pdo_integer24       = -1;
 static gint hf_epl_pdo_integer32       = -1;
 static gint hf_epl_pdo_integer40       = -1;
 static gint hf_epl_pdo_integer48       = -1;
@@ -1506,7 +1525,7 @@ static gint hf_epl_pdo_octet_string    = -1;
 static gint hf_epl_pdo_unicode_string  = -1;
 static gint hf_epl_pdo_time_of_day     = -1;
 static gint hf_epl_pdo_time_difference = -1;
-static gint hf_epl_pdo_nettime	       = -1;
+static gint hf_epl_pdo_nettime         = -1;
 
 static gint hf_epl_pdo_domain     = -1;
 static gint hf_epl_pdo_mac        = -1;
@@ -1519,9 +1538,9 @@ static gint hf_epl_pdo_unsigned[EPL_PDO_TYPE_COUNT]
 		? &hf_epl_pdo_unsigned[(size) - 1] : NULL)
 
 static const struct dataTypeMap_in {
-    const char *name;
-    gint *hf;
-    guint encoding;
+	const char *name;
+	gint *hf;
+	guint encoding;
 } dataTypeMap_in[] = {
 	{ "Boolean", &hf_epl_pdo_boolean, ENC_LITTLE_ENDIAN },
 	{ "Integer8", &hf_epl_pdo_integer8 , ENC_LITTLE_ENDIAN },
@@ -1647,11 +1666,11 @@ static reassembly_table epl_reassembly_table;
 #define EPL_BROADCAST_NODEID                    255
 
 gboolean epl_g_int16_equal(gconstpointer v1, gconstpointer v2) {
-    return *(guint16*)v1 == *(guint16*)v2;
+	return *(guint16*)v1 == *(guint16*)v2;
 }
 
 guint epl_g_int16_hash(gconstpointer v) {
-    return *(guint16*)v;
+	return *(guint16*)v;
 }
 
 static GHashTable *epl_profiles;
@@ -1838,8 +1857,8 @@ static struct epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 // TODO: remove this
 #if 1
 static void iterator(gpointer key, gpointer value, gpointer user_data) {
-    struct object *obj = value;
-    printf("%d. [%d/%x => '%s']\n", *(int*)user_data, *(gint*)key, obj->index, obj->name);
+	struct object *obj = value;
+	printf("%d. [%d/%x => '%s']\n", *(int*)user_data, *(gint*)key, obj->index, obj->name);
 }
 void debug_me_hard(void) {
 	struct profile **profile = wmem_array_get_raw(CN_base_profiles);
@@ -1856,7 +1875,7 @@ static struct object *object_lookup(struct profile **profiles, size_t profile_co
 
 	for (i = 0; i < profile_count; i++) {
 		struct profile *profile = profiles[i];
-                if ((obj = g_hash_table_lookup(profile->objects, &index))) {
+	            if ((obj = g_hash_table_lookup(profile->objects, &index))) {
 			break;
 		}
 	}
@@ -2240,8 +2259,8 @@ dissect_eplpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean udp
 			offset = dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_AMNI);
 			break;
 
-               /* Default case can not happen as it is caught by an earlier switch
-                       *                       statement */
+	           /* Default case can not happen as it is caught by an earlier switch
+	                   *                       statement */
 	}
 
 
@@ -2370,11 +2389,6 @@ dissect_epl_preq(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 		&hf_epl_preq_rd,
 		NULL
 	};
-	proto_item *ti;
-
-	ti = proto_tree_add_uint(epl_tree, hf_epl_convo, tvb, offset, 1, convo->cn);
-        PROTO_ITEM_SET_GENERATED(ti);
-
 
 	offset += 1;
 
@@ -4065,6 +4079,7 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 }
 
 
+static uat_field_t profile_list_uats_flds[];
 
 /* Register the protocol with Wireshark */
 void
@@ -5116,10 +5131,38 @@ proto_register_epl(void)
 	prefs_register_bool_preference(epl_module, "show_duplicated_command_layer", "Show command-layer in duplicated frames",
 		"For analysis purposes one might want to show the command layer even if the dissectore assumes a duplicated frame", &show_cmd_layer_for_duplicated);
 
+	profile_uat = uat_new("EPL Device Profiles",
+			sizeof (struct profile_uat_assoc),
+			"epl_profiles",                /* filename */
+			TRUE,                          /* from_profile */
+			&profile_list_uats,             /* data_ptr */
+			&nprofile_uat,                  /* numitems_ptr */
+			UAT_AFFECTS_DISSECTION,         /* affects dissection of packets, but not set of named fields */
+			NULL,                           /* Help section (currently a wiki page) */
+			profile_uat_copy_cb,
+			NULL,
+			profile_uat_free_cb,
+			profile_parse_uat,
+			profile_list_uats_flds);
+
+	prefs_register_uat_preference(epl_module, "key_table",
+			"EPL Device profiles",
+			"Add vendor-provided XDD profiles here",
+			profile_uat
+			);
+
 	/* tap-registration */
 	/*  epl_tap = register_tap("epl-xdd");*/
+
 	puts("EPL+XDD plugin built on " __DATE__ " " __TIME__);
 }
+
+static uat_field_t profile_list_uats_flds[] = {
+	UAT_FLD_DEC(profile_list_uats, DeviceType, "DeviceType", "e.g. 401"),
+	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_chk_cb, "Path to the EDS/XDD/XDC"),
+
+	UAT_END_FIELDS
+};
 
 
 
@@ -5134,6 +5177,57 @@ proto_reg_handoff_epl(void)
 	/* register frame init routine */
 	register_init_routine( setup_dissector );
 	register_cleanup_routine( cleanup_dissector );
+}
+
+static void
+profile_parse_uat(void)
+{
+	printf("Parsing UAT\n");
+}
+
+static void
+profile_uat_free_cb(void *r)
+{
+	struct profile_uat_assoc *h = (struct profile_uat_assoc *)r;
+
+	g_free(h->path);
+}
+
+static void*
+profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_)
+{
+	const struct profile_uat_assoc *src = (const struct profile_uat_assoc *)src_;
+	struct profile_uat_assoc       *dst = (struct profile_uat_assoc *)dst_;
+
+	dst->path   = g_strdup(src->path);
+
+	return dst;
+}
+
+
+static gboolean
+profile_uat_fld_fileopen_chk_cb(void* r _U_, const char* p, guint len _U_, const void* u1 _U_, const void* u2 _U_, char** err)
+{
+#if 0
+	ws_statb64 st;
+
+	if (!p || strlen(p) == 0u) {
+	    printf("no file name\n");
+	    *err = g_strdup_printf("No filename given.");
+	    return FALSE;
+	} else {
+	    if (ws_stat64(p, &st) != 0) {
+	    printf("no exist\n");
+	        *err = g_strdup_printf("File '%s' does not exist or access is denied.", p);
+	        return FALSE;
+	    }
+	    printf("file exist\n");
+	}
+
+	*err = NULL;
+#endif
+	*err = NULL;
+	return TRUE;
 }
 
 /*
