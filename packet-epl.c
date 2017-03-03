@@ -69,7 +69,7 @@
 #include <epan/proto_data.h>
 #include <epan/uat.h>
 #include <glib.h>
-// TODO: remove this 
+// TODO: remove this
 #include <stdio.h>
 
 /* User Access Table */
@@ -1708,7 +1708,7 @@ static void
 install_default_profiles(void) {
 	struct profile *ds401 = xdd_load(wmem_file_scope(), 401,
 			"/Users/a3f/pse/wireshark/plugins/epl_plus_xdd/xdd/401.xdc");
-	if (ds401) 
+	if (ds401)
 		wmem_array_append_one(CN_base_profiles, ds401);
 }
 
@@ -1764,7 +1764,7 @@ add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping) {
 	guint i, len;
 	struct object_mapping *mappings = get_object_mappings(arr, &len);
 	for (i = 0; i < len; i++) {
-		if (mappings[i].param.index == mapping->param.index 
+		if (mappings[i].param.index == mapping->param.index
 		&&  mappings[i].param.subindex == mapping->param.subindex) {
 			mappings[i] = *mapping;
 			return len;
@@ -1815,7 +1815,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		proto_item *psf_item, *ti;
 		struct object_mapping *map = &mappings[i];
 		guint willbe_offset_bits = map->offset + map->len;
-		
+
 		if (willbe_offset_bits > rem_len * 8) {
 			break;
 		}
@@ -1834,10 +1834,10 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		if (map->obj && map->obj->type) {
 			proto_tree_add_item(psf_tree, *map->obj->type->hf, payload_tvb,
 					map->offset / 8, map->len / 8, map->obj->type->encoding);
-		} else { 
-			dissect_epl_payload_fallback(psf_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType); 
+		} else {
+			dissect_epl_payload_fallback(psf_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType);
 		}
-		// FIXME: check if there's more data, if so call dissect_epl_payload 
+		// FIXME: check if there's more data, if so call dissect_epl_payload
 
 
 		off = willbe_offset_bits / 8;
@@ -3474,7 +3474,7 @@ gint
 dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
 	gint size, payload_length = 0;
-	guint16 idx = 0x00, nosub = 0x00, sod_index = 0x00, error = 0xFF, entries = 0x00, sub_val = 0x00; 
+	guint16 idx = 0x00, nosub = 0x00, sod_index = 0x00, error = 0xFF, entries = 0x00, sub_val = 0x00;
 	guint8 subindex = 0x00;
 	guint32 fragmentId = 0;
 	guint32 frame = 0;
@@ -3529,7 +3529,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 							val_to_str_ext(EPL_ASND_SDO_COMMAND_WRITE_BY_INDEX, &epl_sdo_asnd_commands_short_ext, "Command(%02X)"),
 							segment_size, idx, subindex);
 
-			if(obj || sod_index == error) 
+			if(obj || sod_index == error)
 			{
 				const char *name = obj ? obj->name :val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined");
 				proto_item_append_text(psf_item, " (%s)", name);
@@ -3716,7 +3716,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 
 			if (map.obj) proto_item_append_text (ti, " (%s)", map.obj->name);
 
-			//TODO: remove 
+			//TODO: remove
 			map.param.index = idx;
 			wmem_strbuf_append_printf(name, "%04X.", idx);
 			offset += 2;
@@ -4961,120 +4961,120 @@ proto_register_epl(void)
 		},
 
 		{ &hf_epl_pdo_boolean,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_BOOLEAN, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer8,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_INT8, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer16,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_INT16, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer24,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_INT24, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer32,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_INT32, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer40,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_INT40, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer48,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_INT48, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer56,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_INT56, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_integer64,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_INT64, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 
 		{ &hf_epl_pdo_real32,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_FLOAT, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_real64,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_DOUBLE, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 
 		{ SIZE_TO_UNSIGNED_HF(1),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT8, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(2),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT16, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(3),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT24, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(4),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT32, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(5),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT40, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(6),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT48, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(7),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT56, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(8),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT64, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 
 		{ &hf_epl_pdo_visible_string,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_STRING, STR_ASCII, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_octet_string,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_BYTES, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_unicode_string,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_STRING, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 #if 0
 		{ &hf_epl_pdo_time_of_day, /* not 1:1 */
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_time_difference, /* not 1:1 */
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_RELATIVE_TIME, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 #endif
 		{ &hf_epl_pdo_nettime,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0x0, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_domain,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_BYTES, BASE_ALLOW_ZERO, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_mac,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_ETHER, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 		{ &hf_epl_pdo_ipv4,
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_BYTES, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		}
 	};
