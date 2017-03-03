@@ -72,7 +72,7 @@
 #include <wsutil/file_util.h>
 #include <glib.h>
 #include <string.h>
-// TODO: remove this 
+// TODO: remove this
 #include <stdio.h>
 
 /* User Access Table */
@@ -1509,63 +1509,63 @@ static gint hf_epl_reassembled_data                          = -1;
 
 /* EPL Data Types */
 static gint hf_epl_pdo                 = -1;
-static gint hf_epl_pdo_index           = -1;
-static gint hf_epl_pdo_subindex        = -1;
+static gint hf_epl_od_index           = -1;
+static gint hf_epl_od_subindex        = -1;
 
-static gint hf_epl_pdo_boolean         = -1;
-static gint hf_epl_pdo_integer8        = -1;
-static gint hf_epl_pdo_integer16       = -1;
-static gint hf_epl_pdo_integer24       = -1;
-static gint hf_epl_pdo_integer32       = -1;
-static gint hf_epl_pdo_integer40       = -1;
-static gint hf_epl_pdo_integer48       = -1;
-static gint hf_epl_pdo_integer56       = -1;
-static gint hf_epl_pdo_integer64       = -1;
-static gint hf_epl_pdo_real32          = -1;
-static gint hf_epl_pdo_real64          = -1;
-static gint hf_epl_pdo_visible_string  = -1;
-static gint hf_epl_pdo_octet_string    = -1;
-static gint hf_epl_pdo_unicode_string  = -1;
-static gint hf_epl_pdo_time_of_day     = -1;
-static gint hf_epl_pdo_time_difference = -1;
-static gint hf_epl_pdo_nettime         = -1;
+static gint hf_epl_od_boolean         = -1;
+static gint hf_epl_od_integer8        = -1;
+static gint hf_epl_od_integer16       = -1;
+static gint hf_epl_od_integer24       = -1;
+static gint hf_epl_od_integer32       = -1;
+static gint hf_epl_od_integer40       = -1;
+static gint hf_epl_od_integer48       = -1;
+static gint hf_epl_od_integer56       = -1;
+static gint hf_epl_od_integer64       = -1;
+static gint hf_epl_od_real32          = -1;
+static gint hf_epl_od_real64          = -1;
+static gint hf_epl_od_visible_string  = -1;
+static gint hf_epl_od_octet_string    = -1;
+static gint hf_epl_od_unicode_string  = -1;
+static gint hf_epl_od_time_of_day     = -1;
+static gint hf_epl_od_time_difference = -1;
+static gint hf_epl_od_nettime         = -1;
 
-static gint hf_epl_pdo_domain     = -1;
-static gint hf_epl_pdo_mac        = -1;
-static gint hf_epl_pdo_ipv4       = -1;
+static gint hf_epl_od_domain     = -1;
+static gint hf_epl_od_mac        = -1;
+static gint hf_epl_od_ipv4       = -1;
 
 #define EPL_PDO_TYPE_COUNT 8
-static gint hf_epl_pdo_unsigned[EPL_PDO_TYPE_COUNT]
+static gint hf_epl_od_unsigned[EPL_PDO_TYPE_COUNT]
 	= {  -1, -1, -1, -1, -1, -1, -1, -1 };
 #define SIZE_TO_UNSIGNED_HF(size) ((0 < (size) && (size) <= EPL_PDO_TYPE_COUNT) \
-		? &hf_epl_pdo_unsigned[(size) - 1] : NULL)
+		? &hf_epl_od_unsigned[(size) - 1] : NULL)
 
 static const struct dataTypeMap_in {
 	const char *name;
 	gint *hf;
 	guint encoding;
 } dataTypeMap_in[] = {
-	{ "Boolean",        &hf_epl_pdo_boolean,   ENC_LITTLE_ENDIAN },
-	{ "Integer8",       &hf_epl_pdo_integer8 , ENC_LITTLE_ENDIAN },
-	{ "Integer16",      &hf_epl_pdo_integer16, ENC_LITTLE_ENDIAN },
-	{ "Integer24",      &hf_epl_pdo_integer24, ENC_LITTLE_ENDIAN },
-	{ "Integer32",      &hf_epl_pdo_integer32, ENC_LITTLE_ENDIAN },
-	{ "Integer40",      &hf_epl_pdo_integer40, ENC_LITTLE_ENDIAN },
-	{ "Integer48",      &hf_epl_pdo_integer48, ENC_LITTLE_ENDIAN },
-	{ "Integer56",      &hf_epl_pdo_integer56, ENC_LITTLE_ENDIAN },
-	{ "Integer64",      &hf_epl_pdo_integer64, ENC_LITTLE_ENDIAN },
-	{ "Real32",         &hf_epl_pdo_real32,    ENC_LITTLE_ENDIAN },
-	{ "Real64",         &hf_epl_pdo_real64,    ENC_LITTLE_ENDIAN },
-	{ "Visible_String", &hf_epl_pdo_visible_string,  ENC_ASCII },
-	{ "Octet_String",   &hf_epl_pdo_octet_string,    ENC_NA },
-	{ "Unicode_String", &hf_epl_pdo_unicode_string,  ENC_UCS_2 },
-	/*{ "Time_of_Day",    &hf_epl_pdo_time_of_day,     ENC_NA },*/
-	/*{ "Time_Diff",      &hf_epl_pdo_time_difference, ENC_NA },*/
-	{ "NETTIME",        &hf_epl_pdo_nettime, ENC_TIME_TIMESPEC },
+	{ "Boolean",        &hf_epl_od_boolean,   ENC_LITTLE_ENDIAN },
+	{ "Integer8",       &hf_epl_od_integer8 , ENC_LITTLE_ENDIAN },
+	{ "Integer16",      &hf_epl_od_integer16, ENC_LITTLE_ENDIAN },
+	{ "Integer24",      &hf_epl_od_integer24, ENC_LITTLE_ENDIAN },
+	{ "Integer32",      &hf_epl_od_integer32, ENC_LITTLE_ENDIAN },
+	{ "Integer40",      &hf_epl_od_integer40, ENC_LITTLE_ENDIAN },
+	{ "Integer48",      &hf_epl_od_integer48, ENC_LITTLE_ENDIAN },
+	{ "Integer56",      &hf_epl_od_integer56, ENC_LITTLE_ENDIAN },
+	{ "Integer64",      &hf_epl_od_integer64, ENC_LITTLE_ENDIAN },
+	{ "Real32",         &hf_epl_od_real32,    ENC_LITTLE_ENDIAN },
+	{ "Real64",         &hf_epl_od_real64,    ENC_LITTLE_ENDIAN },
+	{ "Visible_String", &hf_epl_od_visible_string,  ENC_ASCII },
+	{ "Octet_String",   &hf_epl_od_octet_string,    ENC_NA },
+	{ "Unicode_String", &hf_epl_od_unicode_string,  ENC_UCS_2 },
+	/*{ "Time_of_Day",    &hf_epl_od_time_of_day,     ENC_NA },*/
+	/*{ "Time_Diff",      &hf_epl_od_time_difference, ENC_NA },*/
+	{ "NETTIME",        &hf_epl_od_nettime, ENC_TIME_TIMESPEC },
 
-	/*{ "Domain",         &hf_epl_pdo_domain, ENC_NA },*/
-	{ "MAC_ADDRESS",    &hf_epl_pdo_mac,    ENC_BIG_ENDIAN },
-	{ "IP_ADDRESS",     &hf_epl_pdo_ipv4,   ENC_BIG_ENDIAN },
+	/*{ "Domain",         &hf_epl_od_domain, ENC_NA },*/
+	{ "MAC_ADDRESS",    &hf_epl_od_mac,    ENC_BIG_ENDIAN },
+	{ "IP_ADDRESS",     &hf_epl_od_ipv4,   ENC_BIG_ENDIAN },
 
 	{ "Unsigned8",  SIZE_TO_UNSIGNED_HF(1), ENC_LITTLE_ENDIAN },
 	{ "Unsigned16", SIZE_TO_UNSIGNED_HF(2), ENC_LITTLE_ENDIAN },
@@ -1711,7 +1711,7 @@ static void
 install_default_profiles(void) {
 	struct profile *ds401 = xdd_load(wmem_file_scope(), 401,
 			"/Users/a3f/pse/wireshark/plugins/epl_plus_xdd/xdd/401.xdc");
-	if (ds401) 
+	if (ds401)
 		wmem_array_append_one(CN_base_profiles, ds401);
 }
 
@@ -1767,7 +1767,7 @@ add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping) {
 	guint i, len;
 	struct object_mapping *mappings = get_object_mappings(arr, &len);
 	for (i = 0; i < len; i++) {
-		if (mappings[i].param.index == mapping->param.index 
+		if (mappings[i].param.index == mapping->param.index
 		&&  mappings[i].param.subindex == mapping->param.subindex) {
 			mappings[i] = *mapping;
 			return len;
@@ -1818,7 +1818,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		proto_item *psf_item, *ti;
 		struct object_mapping *map = &mappings[i];
 		guint willbe_offset_bits = map->offset + map->len;
-		
+
 		if (willbe_offset_bits > rem_len * 8) {
 			break;
 		}
@@ -1826,12 +1826,12 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", map->index_name);
 		psf_tree = proto_item_add_subtree(psf_item, ett_epl_pdo);
 
-		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_pdo_index, payload_tvb, 0, 0, map->param.index, "%04X", map->param.index);
+		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_od_index, payload_tvb, 0, 0, map->param.index, "%04X", map->param.index);
 		PROTO_ITEM_SET_GENERATED(ti);
 		if (map->info)
 			proto_item_append_text (ti, " (%s)", map->index_name);
 
-		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_pdo_subindex, payload_tvb, 0, 0, map->param.subindex, "%02X", map->param.subindex);
+		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_od_subindex, payload_tvb, 0, 0, map->param.subindex, "%02X", map->param.subindex);
 		PROTO_ITEM_SET_GENERATED(ti);
 		if (map->info)
 			proto_item_append_text (ti, " (%s)", map->info->name);
@@ -1842,7 +1842,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		} else { 
 			dissect_epl_payload_fallback(psf_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType); 
 		}
-		// FIXME: check if there's more data, if so call dissect_epl_payload 
+		// FIXME: check if there's more data, if so call dissect_epl_payload
 
 
 		off = willbe_offset_bits / 8;
@@ -3486,7 +3486,7 @@ gint
 dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
 	gint size, payload_length = 0;
-	guint16 idx = 0x00, nosub = 0x00, sod_index = 0x00, error = 0xFF, entries = 0x00, sub_val = 0x00; 
+	guint16 idx = 0x00, nosub = 0x00, sod_index = 0x00, error = 0xFF, entries = 0x00, sub_val = 0x00;
 	guint8 subindex = 0x00;
 	guint32 fragmentId = 0;
 	guint32 frame = 0;
@@ -3545,7 +3545,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 							val_to_str_ext(EPL_ASND_SDO_COMMAND_WRITE_BY_INDEX, &epl_sdo_asnd_commands_short_ext, "Command(%02X)"),
 							segment_size, idx, subindex);
 
-			if(obj || sod_index == error) 
+			if(obj || sod_index == error)
 			{
 				const char *name = obj ? obj->info.name :val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined");
 				proto_item_append_text(psf_item, " (%s)", name);
@@ -4974,130 +4974,130 @@ proto_register_epl(void)
 			{ "PDO", "epl-xdd.pdo",
 				FT_STRING, STR_ASCII, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_index,
+		{ &hf_epl_od_index,
 			{ "Index", "epl-xdd.pdo.index",
 				FT_UINT16, BASE_HEX, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_subindex,
+		{ &hf_epl_od_subindex,
 			{ "SubIndex", "epl-xdd.pdo.subindex",
 				FT_UINT8, BASE_HEX, NULL, 0x00, NULL, HFILL }
 		},
 
-		{ &hf_epl_pdo_boolean,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_boolean,
+			{ "Data", "epl-xdd.od.data",
 				FT_BOOLEAN, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_integer8,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_integer8,
+			{ "Data", "epl-xdd.od.data",
 				FT_INT8, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_integer16,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_integer16,
+			{ "Data", "epl-xdd.od.data",
 				FT_INT16, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_integer24,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_integer24,
+			{ "Data", "epl-xdd.od.data",
 				FT_INT24, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_integer32,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_integer32,
+			{ "Data", "epl-xdd.od.data",
 				FT_INT32, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_integer40,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_integer40,
+			{ "Data", "epl-xdd.od.data",
 				FT_INT40, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_integer48,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_integer48,
+			{ "Data", "epl-xdd.od.data",
 				FT_INT48, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_integer56,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_integer56,
+			{ "Data", "epl-xdd.od.data",
 				FT_INT56, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_integer64,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_integer64,
+			{ "Data", "epl-xdd.od.data",
 				FT_INT64, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
 
-		{ &hf_epl_pdo_real32,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_real32,
+			{ "Data", "epl-xdd.od.data",
 				FT_FLOAT, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_real64,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_real64,
+			{ "Data", "epl-xdd.od.data",
 				FT_DOUBLE, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 
 		{ SIZE_TO_UNSIGNED_HF(1),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT8, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(2),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT16, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(3),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT24, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(4),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT32, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(5),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT40, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(6),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT48, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(7),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT56, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 		{ SIZE_TO_UNSIGNED_HF(8),
-			{ "Data", "epl-xdd.pdo.data",
+			{ "Data", "epl-xdd.od.data",
 				FT_UINT64, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
 		},
 
-		{ &hf_epl_pdo_visible_string,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_visible_string,
+			{ "Data", "epl-xdd.od.data",
 				FT_STRING, STR_ASCII, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_octet_string,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_octet_string,
+			{ "Data", "epl-xdd.od.data",
 				FT_BYTES, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_unicode_string,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_unicode_string,
+			{ "Data", "epl-xdd.od.data",
 				FT_STRING, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 #if 0
-		{ &hf_epl_pdo_time_of_day, /* not 1:1 */
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_time_of_day, /* not 1:1 */
+			{ "Data", "epl-xdd.od.data",
 				FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_time_difference, /* not 1:1 */
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_time_difference, /* not 1:1 */
+			{ "Data", "epl-xdd.od.data",
 				FT_RELATIVE_TIME, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
 #endif
-		{ &hf_epl_pdo_nettime,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_nettime,
+			{ "Data", "epl-xdd.od.data",
 				FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0x0, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_domain,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_domain,
+			{ "Data", "epl-xdd.od.data",
 				FT_BYTES, BASE_ALLOW_ZERO, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_mac,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_mac,
+			{ "Data", "epl-xdd.od.data",
 				FT_ETHER, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_pdo_ipv4,
-			{ "Data", "epl-xdd.pdo.data",
+		{ &hf_epl_od_ipv4,
+			{ "Data", "epl-xdd.od.data",
 				FT_BYTES, BASE_NONE, NULL, 0x00, NULL, HFILL }
 		}
 	};
