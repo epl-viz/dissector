@@ -3712,7 +3712,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 		/* if the frame is a PDO Mapping and the subindex is bigger than 0x00 */
 		if((idx == EPL_SOD_PDO_TX_MAPP && subindex > entries) || (idx == EPL_SOD_PDO_RX_MAPP && subindex > entries))
 		{
-			proto_item *ti;
+			proto_item *ti_obj, *ti_subobj;
 			struct object_mapping map = {0};
 			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
 
@@ -3720,12 +3720,15 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			psf_tree = proto_item_add_subtree(psf_item, ett_epl_asnd_sdo_cmd_data_mapping);
 
 			idx = tvb_get_letohs(tvb, offset);
-			ti = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, offset, 2, idx,"Index: 0x%04X", idx);
+			ti_obj = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, offset, 2, idx,"Index: 0x%04X", idx);
 			map.param.index = idx;
 			offset += 2;
 
 			idx = tvb_get_letohs(tvb, offset);
 			map.param.subindex = idx;
+			ti_subobj = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, offset, 1, idx,"SubIndex: 0x%02X", idx);
+			offset += 2;
+
 			/* look up index in registered profiles */
 			{
 				struct profile **profiles;
@@ -3740,17 +3743,16 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 				if (mapping_obj) {
 					map.info = &mapping_obj->info;
 					map.index_name = map.info->name;
-					proto_item_append_text (ti, " (%s)", map.info->name);
+					proto_item_append_text (ti_obj, " (%s)", map.info->name);
 
 					mapping_subobj = subobject_lookup(mapping_obj, map.param.subindex);
-					if (mapping_subobj)
+					if (mapping_subobj) {
 						map.info = &mapping_subobj->info;
+						proto_item_append_text (ti_subobj, " (%s)", map.info->name);
+					}
 				}
 			}
 
-			ti = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, offset, 1, idx,"SubIndex: 0x%02X", idx);
-			if (map.info) proto_item_append_text (ti, " (%s)", map.info->name);
-			offset += 2;
 
 			map.offset = idx = tvb_get_letohs(tvb, offset);
 			proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_offset, tvb, offset, 2, idx,"Offset: 0x%04X", idx);
