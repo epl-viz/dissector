@@ -35,8 +35,10 @@ xdd_free(void)
 }
 
 /* XXX: do this in build system instead? */
-#if !defined(LIBXML_XPATH_ENABLED) || !defined(LIBXML_SAX1_ENABLED)
-#error "No XPATH support"
+#if !defined(LIBXML_XPATH_ENABLED) \
+||  !defined(LIBXML_SAX1_ENABLED)  \
+||  !defined(LIBXML_TREE_ENABLED)
+#error "libxml needs XPATH, SAX1 and TREE support compiled in!"
 #endif
 
 typedef int xpath_handler(xmlNodeSetPtr, void*);
@@ -121,7 +123,7 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 
 	return profile;
 fail:
-	if (profile->data) {
+	if (profile && profile->data) {
 		g_hash_table_destroy(profile->data);
 		profile->data = NULL;
 	}
