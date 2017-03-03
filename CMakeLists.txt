@@ -27,6 +27,7 @@ set_module_info(epl_plus_xdd 0 0 3 0)
 set(DISSECTOR_SRC
 	packet-epl.c
 	xdd.c
+	wmem_iarray.c
 )
 
 set(PLUGIN_FILES
@@ -48,6 +49,10 @@ endif(WERROR_COMMON_FLAGS)
 
 set(LibXml2_ROOT ${CMAKE_CURRENT_LIST_DIR})
 find_package(LibXml2 REQUIRED )
+
+IF(CMAKE_COMPILER_IS_GNUCC)
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
+ENDIF(CMAKE_COMPILER_IS_GNUCC)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${LIBXML2_INCLUDE_DIR})
 set(LIBS ${LIBS} ${LIBXML2_LIBRARIES})

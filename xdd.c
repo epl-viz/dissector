@@ -11,6 +11,8 @@
 #include <libxml/xpathInternals.h>
 #include <errno.h>
 
+#include "wmem_iarray.h"
+
 static guint16
 strtou16(const char * str, char ** endptr, int base)
 {
@@ -54,7 +56,7 @@ struct namespace {
 
 struct xpath {
 	const xmlChar *expr;
-	int (*handler)(xmlNodeSet *node_set, void *data);
+	xpath_handler *handler;
 } xpaths[] = {
 	{
 		BAD_CAST "//x:ProfileBody[@xsi:type='ProfileBody_CommunicationNetwork_Powerlink']/x:ApplicationLayers/x:DataTypeList/x:defType",
@@ -194,21 +196,9 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 	return 0;
 }
 
-static int
-populate_objectList(xmlNodeSetPtr nodes, void *data)
-{
-	xmlNodePtr cur;
-	int i;
-	struct profile *profile = data;
-
-	for(i = 0; i < nodes->nodeNr; ++i) {
+static gboolean
+parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 		xmlAttrPtr attr;
-		struct object obj = {0};
-
-		if(!nodes->nodeTab[i] || nodes->nodeTab[i]->type != XML_ELEMENT_NODE)
-			return -1;
-
-		cur = nodes->nodeTab[i];
 
 		for(attr = cur->properties; attr; attr = attr->next) {
 			char *endptr;
@@ -216,22 +206,25 @@ populate_objectList(xmlNodeSetPtr nodes, void *data)
 				  *val = (char*)attr->children->content;
 
 			if (strcmp("index", key) == 0) {
-				obj.index = strtou16(val, &endptr, 16);
-				if (val == endptr) break;
+				out->index = strtou16(val, &endptr, 16);
+				if (val == endptr) return FALSE;
+
+			} else if (strcmp("subIndex", key) == 0) {
+				out->index = strtou16(val, &endptr, 16);
+				if (val == endptr) return FALSE;
 
 			} else if (strcmp("name", key) == 0) {
-				g_strlcpy(obj.name, val, sizeof obj.name);
+				g_strlcpy(out->name, val, sizeof out->name);
 
 			} else if (strcmp("objectType", key) == 0) {
-				obj.kind = strtou16(val, &endptr, 16);
-				/*assert((7 <= obj.kind && obj.kind <= 9) && endptr != val);*/
+				out->kind = strtou16(val, &endptr, 16);
 
 			} else if (strcmp("dataType", key) == 0) {
 				guint16 id = strtou16(val, &endptr, 16);
 				if (endptr != val) {
 					struct dataType *type = g_hash_table_lookup(profile->data, &id);
 					if (type)
-						obj.type = type->ptr;
+						out->type = type->ptr;
 				}
 			}
 			/*else if (strcmp("PDOmapping", key) == 0) {
@@ -240,9 +233,54 @@ populate_objectList(xmlNodeSetPtr nodes, void *data)
 			  }*/
 		}
 
-		if (obj.index)
-			*profile_object_add(profile, obj.index) = obj;
+		return TRUE;
+}
 
+gboolean subobject_equal(gconstpointer _a, gconstpointer _b) {
+	const struct od_entry *a = &((struct subobject*)_a)->info,
+						  *b = &((struct subobject*)_b)->info;
+	return a->kind == b->kind
+		&& a->type == b->type
+		&& strcmp(a->name, b->name) == 0;
+}
+
+static int
+populate_objectList(xmlNodeSetPtr nodes, void *data)
+{
+	int i;
+	struct profile *profile = data;
+
+	for(i = 0; i < nodes->nodeNr; ++i) {
+		xmlNodePtr cur = nodes->nodeTab[i];
+		struct od_entry tmpobj = {0};
+
+		if (!nodes->nodeTab[i] || nodes->nodeTab[i]->type != XML_ELEMENT_NODE)
+			continue;
+
+		parse_obj_tag(cur, &tmpobj, data);
+
+		if (tmpobj.index) {
+			struct object *obj = profile_object_add(profile, tmpobj.index);
+			obj->info = tmpobj;
+
+			if (tmpobj.kind == 8 || tmpobj.kind == 9) {
+				xmlNode *subcur;
+				struct subobject subobj = {0};
+
+				obj->subindices = epl_wmem_iarray_new(profile->scope, sizeof (struct subobject), subobject_equal);
+
+				for (subcur = cur->children; subcur; subcur = subcur->next) {
+					if (subcur->type != XML_ELEMENT_NODE)
+						continue;
+
+					if (parse_obj_tag(subcur, &subobj.info, profile)) {
+						epl_wmem_iarray_insert(obj->subindices,
+								subobj.info.index, &subobj.range);
+					}
+				}
+				epl_wmem_iarray_lock(obj->subindices);
+			}
+		}
 	}
 
 	return 0;

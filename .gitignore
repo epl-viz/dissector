@@ -1,6 +1,11 @@
-# autotools
-.deps/
-.libs/
+# autotools 
+.deps/ 
+.libs/ 
+ 
+*.la 
+*.lo 
 
-*.la
-*.lo
+test
+FALSE
+.ycm_extra_conf.py*
+*.o

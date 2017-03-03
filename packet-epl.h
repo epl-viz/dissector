@@ -8,6 +8,7 @@
 
 #include <glib.h>
 #include <epan/wmem/wmem.h>
+#include "wmem_iarray.h"
 
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
@@ -27,16 +28,20 @@ struct profile {
 	void *data;
 };
 
-struct subobject {
-	/*range_string *range;*/
-	const char *name;
-};
-struct object {
+struct od_entry {
 	guint16 index;
 	guint8 kind; /* object type, is it aggregate or plain and so, FIXME needs better name */
 	char name[64];
 	const struct dataTypeMap_in *type;
-	GArray *subindices;
+};
+
+struct subobject {
+	range_admin_t range;
+	struct od_entry info;
+};
+struct object {
+	struct od_entry info;
+	epl_wmem_iarray_t *subindices;
 };
 
 
