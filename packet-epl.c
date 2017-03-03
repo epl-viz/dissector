@@ -3749,7 +3749,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			}
 
 			ti = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, offset, 1, idx,"SubIndex: 0x%02X", idx);
-			proto_item_append_text (ti, " (%s)", map.info->name);
+			if (map.info) proto_item_append_text (ti, " (%s)", map.info->name);
 			offset += 2;
 
 			map.offset = idx = tvb_get_letohs(tvb, offset);

@@ -17,8 +17,10 @@ static guint16
 strtou16(const char * str, char ** endptr, int base)
 {
 	unsigned long val = strtoul(str, endptr, base);
-	if (val >= G_MAXUINT16 && errno == ERANGE)
+	if (val > G_MAXUINT16) {
 		val = G_MAXUINT16;
+		errno = ERANGE;
+	}
 	return val;
 }
 
