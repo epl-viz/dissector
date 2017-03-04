@@ -72,12 +72,14 @@
 #include <wsutil/file_util.h>
 #include <glib.h>
 #include <string.h>
+#include <errno.h>
 // TODO: remove this
 #include <stdio.h>
 
 /* User Access Table */
 struct profile_uat_assoc {
-	gint DeviceType;
+	char *DeviceTypeString;
+	guint DeviceType;
 	char *path;
 };
 
@@ -85,8 +87,9 @@ static void *profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
 static void profile_uat_free_cb(void *r);
 static void profile_parse_uat(void);
 static gboolean profile_uat_fld_fileopen_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
+static gboolean profile_uat_fld_devicetype_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
 
-UAT_DEC_CB_DEF(profile_list_uats, DeviceType, struct profile_uat_assoc)
+UAT_CSTRING_CB_DEF(profile_list_uats, DeviceTypeString, struct profile_uat_assoc)
 UAT_FILENAME_CB_DEF(profile_list_uats, path, struct profile_uat_assoc)
 
 void proto_register_epl(void);
@@ -1507,7 +1510,9 @@ static gint hf_epl_reassembled_in                            = -1;
 static gint hf_epl_reassembled_length                        = -1;
 static gint hf_epl_reassembled_data                          = -1;
 
-/* EPL Data Types */
+static gint hf_epl_asnd_identresponse_profile_path = -1;
+
+/* EPL OD Data Types */
 static gint hf_epl_pdo                 = -1;
 static gint hf_epl_od_index           = -1;
 static gint hf_epl_od_subindex        = -1;
@@ -1681,7 +1686,6 @@ epl_g_int16_hash(gconstpointer v)
 }
 
 static wmem_map_t *epl_profiles;
-static wmem_array_t *CN_base_profiles, *MN_base_profiles;
 
 struct profile *
 profile_new(wmem_allocator_t *scope, guint16 id)
@@ -1691,6 +1695,8 @@ profile_new(wmem_allocator_t *scope, guint16 id)
 	profile->id      = id;
 	profile->scope   = scope;
 	profile->objects = wmem_map_new(scope, epl_g_int16_hash, epl_g_int16_equal);
+	profile->name = NULL;
+	profile->path = NULL;
 
 	wmem_map_insert(epl_profiles, &profile->id, profile);
 	return profile;
@@ -1705,14 +1711,6 @@ profile_object_add(struct profile *profile, guint16 index)
 
 	wmem_map_insert(profile->objects, &object->info.index, object);
 	return object;
-}
-
-static void
-install_default_profiles(void) {
-	struct profile *ds401 = xdd_load(wmem_file_scope(), 401,
-			"/Users/a3f/pse/wireshark/plugins/epl_plus_xdd/xdd/401.xdc");
-	if (ds401)
-		wmem_array_append_one(CN_base_profiles, ds401);
 }
 
 static address convo_mac;
@@ -1747,6 +1745,7 @@ struct object_mapping {
 	/* info */
 	struct od_entry *info;
 	const char *index_name;
+	const char *title;
 };
 static struct object_mapping *
 get_object_mappings(wmem_array_t *arr, guint *len) {
@@ -1790,8 +1789,7 @@ struct epl_convo {
 	wmem_array_t *TPDO; /* CN->MN */
 	wmem_array_t *RPDO; /* MN->CN */
 	struct {
-		wmem_array_t *CN;
-		wmem_array_t *MN;
+		struct profile *CN, *MN;
 	} profiles;
 };
 
@@ -1823,7 +1821,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 			break;
 		}
 
-		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", map->index_name);
+		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", map->title);
 		psf_tree = proto_item_add_subtree(psf_item, ett_epl_pdo);
 
 		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_od_index, payload_tvb, 0, 0, map->param.index, "%04X", map->param.index);
@@ -1871,37 +1869,23 @@ epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 		convo->TPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
 		convo->RPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
 
-		convo->profiles.CN = wmem_array_new(wmem_file_scope(), sizeof (struct profile*));
-		wmem_array_append(
-				convo->profiles.CN,
-				wmem_array_get_raw(CN_base_profiles),
-				wmem_array_get_count(CN_base_profiles)
-		);
-
-		convo->profiles.MN = MN_base_profiles; /* Any reason to keep this? */
+		convo->profiles.CN = NULL;
+		convo->profiles.MN = NULL;
 
 		conversation_add_proto_data(epan_conversation, proto_epl, (void *)convo);
 	}
 	return convo;
 }
 
-// TODO: remove this
-#if 1
-static void
-iterator(gpointer key, gpointer value, gpointer user_data) {
-	struct object *obj = value;
-	printf("%d. [%d/%x => '%s']\n",
-			*(int*)user_data, *(gint*)key, obj->info.index, obj->info.name);
+gboolean epl_update_convo_cn_profile(struct epl_convo *convo, guint16 profile_id) {
+	struct profile *profile;
+	if ((profile = (struct profile*)wmem_map_lookup(epl_profiles, &profile_id))) {
+		convo->profiles.CN = profile;
+		return TRUE;
+	}
+	return FALSE;
 }
-void
-debug_me_hard(void) {
-	struct profile **profile = wmem_array_get_raw(CN_base_profiles);
-	size_t n = wmem_array_get_count(CN_base_profiles);
-	size_t i;
-	for (i = 0; i < n; i++)
-		wmem_map_foreach(profile[i]->objects, (GHFunc)iterator, &i);
-}
-#endif
+
 static struct object *
 object_lookup(struct profile **profiles, size_t profile_count, guint16 index)
 {
@@ -1910,7 +1894,9 @@ object_lookup(struct profile **profiles, size_t profile_count, guint16 index)
 
 	for (i = 0; i < profile_count; i++) {
 		struct profile *profile = profiles[i];
-	            if ((obj = wmem_map_lookup(profile->objects, &index))) {
+		if (!profile) continue;
+
+		if ((obj = wmem_map_lookup(profile->objects, &index))) {
 			break;
 		}
 	}
@@ -2059,13 +2045,6 @@ setup_dissector(void)
 	reassembly_table_init(&epl_reassembly_table, &addresses_reassembly_table_functions);
 
 	/* init device profiles support */
-	epl_profiles = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
-	CN_base_profiles = wmem_array_new(wmem_epan_scope(), sizeof (struct profile*));
-	MN_base_profiles = wmem_array_new(wmem_epan_scope(), sizeof (struct profile*));
-
-	xdd_init();
-
-	install_default_profiles(); /* FIXME: remove this */
 
 	/* populate static address for convo */
 	set_address(&convo_mac, AT_NONE, 0, NULL);
@@ -2894,7 +2873,7 @@ dissect_epl_asnd_ires(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *t
 {
 	guint16 additional;
 	guint32 epl_asnd_identresponse_ipa, epl_asnd_identresponse_snm, epl_asnd_identresponse_gtw;
-	proto_item  *ti_feat;
+	proto_item  *ti_feat, *ti;
 	proto_tree  *epl_feat_tree;
 
 	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_en, tvb, offset, 1, ENC_LITTLE_ENDIAN);
@@ -2963,7 +2942,17 @@ dissect_epl_asnd_ires(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *t
 								4, "", "Profile %d (%s), Additional Information: 0x%4.4X",
 								convo->DeviceType, val_to_str_const(convo->DeviceType, epl_device_profiles, "Unknown Profile"), additional);
 
-	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_profile, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+	ti = proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_profile, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+	epl_update_convo_cn_profile(convo, convo->DeviceType);
+	if (convo->profiles.CN) {
+		if (convo->profiles.CN->name)
+			proto_item_append_text(ti, " (%s)", convo->profiles.CN->name);
+		if (convo->profiles.CN->path) {
+			ti = proto_tree_add_string(epl_tree, hf_epl_asnd_identresponse_profile_path, tvb, offset, 2, convo->profiles.CN->path);
+			PROTO_ITEM_SET_GENERATED(ti);
+		}
+	}
+
 	offset += 4;
 
 	convo->VendorId = tvb_get_letohl(tvb, offset);
@@ -3506,19 +3495,16 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 
 		if (segmented <= EPL_ASND_SDO_CMD_SEGMENTATION_INITIATE_TRANSFER)
 		{
-			struct profile **profiles;
-
 			/* get index offset */
 			idx = tvb_get_letohs(tvb, offset);
 			/* add index item */
 			psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-			/* look up index in registered profiles */
-			profiles = wmem_array_get_raw(convo->profiles.CN);
+			/* look up index in registered profile */
 			obj = object_lookup(
-					profiles,
-					wmem_array_get_count(convo->profiles.CN),
+					&convo->profiles.CN,
+					1,
 					idx
-			); // TODO: return the profile where the object was found too
+			);
 			if (!obj) {
 				/* value to string */
 				index_str = rval_to_str_const(idx, sod_cmd_str, "unknown");
@@ -3731,13 +3717,11 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 
 			/* look up index in registered profiles */
 			{
-				struct profile **profiles;
 				struct object *mapping_obj;
 				struct subobject *mapping_subobj;
-				profiles = wmem_array_get_raw(convo->profiles.CN);
 				mapping_obj = object_lookup(
-						profiles,
-						wmem_array_get_count(convo->profiles.CN),
+						&convo->profiles.CN,
+						1,
 						map.param.index
 				);
 				if (mapping_obj) {
@@ -3761,6 +3745,8 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			map.len = tvb_get_guint8(tvb, offset);
 			proto_tree_add_item(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_length, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 			offset += 2;
+
+			map.title = "PDO";
 
 
 			add_object_mapping(mappings, &map);
@@ -4522,6 +4508,10 @@ proto_register_epl(void)
 			{ "Profile", "epl-xdd.asnd.ires.profile",
 				FT_UINT16, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
+		{ &hf_epl_asnd_identresponse_profile_path,
+			{ "Profile Path", "epl-xdd.asnd.ires.profilepath",
+				FT_STRING, STR_UNICODE, NULL, 0x00, NULL, HFILL }
+		},
 		{ &hf_epl_asnd_identresponse_vid,
 			{ "VendorId", "epl-xdd.asnd.ires.vendorid",
 				FT_UINT32, BASE_DEC_HEX, NULL, 0x00, NULL, HFILL }
@@ -5189,6 +5179,10 @@ proto_register_epl(void)
 	prefs_register_bool_preference(epl_module, "show_duplicated_command_layer", "Show command-layer in duplicated frames",
 		"For analysis purposes one might want to show the command layer even if the dissectore assumes a duplicated frame", &show_cmd_layer_for_duplicated);
 
+	epl_profiles = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
+
+	xdd_init();
+
 	profile_uat = uat_new("EPL Device Profiles",
 			sizeof (struct profile_uat_assoc),
 			"epl_profiles",                /* filename */
@@ -5216,7 +5210,7 @@ proto_register_epl(void)
 }
 
 static uat_field_t profile_list_uats_flds[] = {
-	UAT_FLD_DEC(profile_list_uats, DeviceType, "DeviceType", "e.g. 401"),
+	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "DeviceType", profile_uat_fld_devicetype_check_cb, "e.g. 401"),
 	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_check_cb, "Path to the EDS/XDD/XDC"),
 
 	UAT_END_FIELDS
@@ -5237,10 +5231,26 @@ proto_reg_handoff_epl(void)
 	register_cleanup_routine( cleanup_dissector );
 }
 
+static void reload_xdd(void *key, void *value, void *user_data _U_) {
+	struct profile *old_profile = *(struct profile**)value;
+	(void)old_profile;
+	wmem_map_remove(epl_profiles, key);
+}
+
 static void
 profile_parse_uat(void)
 {
-	printf("Parsing UAT\n");
+	guint i;
+	struct profile *profile;
+	wmem_map_foreach(epl_profiles, reload_xdd, NULL);
+        for (i = 0; i < nprofile_uat; i++) {
+            struct profile_uat_assoc *uat = &(profile_list_uats[i]);
+		profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
+		if (profile) {
+			printf("Adding %s\n", profile->path);
+			wmem_map_insert(epl_profiles, &profile->id, profile);
+		}
+	}
 }
 
 static void
@@ -5258,8 +5268,25 @@ profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_)
 	struct profile_uat_assoc       *dst = (struct profile_uat_assoc *)dst_;
 
 	dst->path   = g_strdup(src->path);
+	dst->DeviceTypeString = g_strdup(src->DeviceTypeString);
+	dst->DeviceType = src->DeviceType;
 
 	return dst;
+}
+
+static gboolean
+profile_uat_fld_devicetype_check_cb(void *_record _U_, const char *str, guint len _U_, const void *chk_data _U_, const void *fld_data _U_, char **err)
+{
+	struct profile_uat_assoc *record = (struct profile_uat_assoc*)_record;
+
+	char *endptr;
+	unsigned long val = strtoul(str, &endptr, 10);
+	if (val > G_MAXUINT16 || endptr != str + len) {
+		*err = g_strdup("Invalid argument. Expected a decimal between [0-65535]");
+		return FALSE;
+	}
+	record->DeviceType = val;
+	return TRUE;
 }
 
 static gboolean

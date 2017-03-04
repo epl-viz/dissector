@@ -46,7 +46,7 @@ xdd_free(void)
 #endif
 
 typedef int xpath_handler(xmlNodeSetPtr, void*);
-static xpath_handler populate_objectList, populate_dataTypeList;
+static xpath_handler populate_objectList, populate_dataTypeList, populate_profileName;
 
 struct namespace {
 	const xmlChar *prefix, *href;
@@ -60,6 +60,10 @@ struct xpath {
 	const xmlChar *expr;
 	xpath_handler *handler;
 } xpaths[] = {
+	{
+		BAD_CAST "//x:ISO15745Profile[x:ProfileHeader/x:ProfileIdentification='Powerlink_Communication_Profile']/x:ProfileHeader/x:ProfileName",
+		populate_profileName
+	},
 	{
 		BAD_CAST "//x:ProfileBody[@xsi:type='ProfileBody_CommunicationNetwork_Powerlink']/x:ApplicationLayers/x:DataTypeList/x:defType",
 		populate_dataTypeList
@@ -106,6 +110,7 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 
 	/* Allocate profile */
 	profile = profile_new(scope, id);
+	profile->path = g_strdup(xml_file);
 
 	/* mapping type ids to &hf_s */
 	profile->data = g_hash_table_new_full(epl_g_int16_hash, epl_g_int16_equal, NULL, g_free);
@@ -142,6 +147,21 @@ fail:
 void
 xdd_unload()
 {
+}
+
+static int
+populate_profileName(xmlNodeSetPtr nodes, void *_profile)
+{
+	struct profile *profile = _profile;
+	if (nodes->nodeNr == 1
+	&&  nodes->nodeTab[0]->type == XML_ELEMENT_NODE
+	&&  nodes->nodeTab[0]->children)
+	{
+		profile->name = (char*)xmlStrdup(nodes->nodeTab[0]->children->content);
+		return 0;
+	}
+
+	return -1;
 }
 
 struct dataType {

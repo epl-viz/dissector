@@ -25,6 +25,8 @@ struct profile {
 	guint16 id;
 	wmem_map_t *objects;
 	wmem_allocator_t *scope;
+	const char *name;
+	const char *path;
 	void *data;
 };
 
