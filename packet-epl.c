@@ -5197,7 +5197,7 @@ proto_register_epl(void)
 			profile_parse_uat,
 			profile_list_uats_flds);
 
-	prefs_register_uat_preference(epl_module, "key_table",
+	prefs_register_uat_preference(epl_module, "profile_list",
 			"EPL Device profiles",
 			"Add vendor-provided XDD profiles here",
 			profile_uat
