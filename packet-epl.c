@@ -2438,7 +2438,7 @@ dissect_epl_preq(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 			(EPL_PDO_RD_MASK & flags), hi_nibble(pdoversion), lo_nibble(pdoversion));
 
 	offset += 2;
-	offset += call_pdo_payload_dissector(convo, epl_tree, tvb, pinfo, offset, len, EPL_PRES );
+	offset += call_pdo_payload_dissector(convo, epl_tree, tvb, pinfo, offset, len, EPL_PREQ );
 
 	return offset;
 }
