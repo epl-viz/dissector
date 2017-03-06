@@ -88,7 +88,7 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 	/* Load XML document */
 	doc = xmlParseFile(xml_file);
 	if (!doc) {
-		fprintf(stderr, "Error: unable to parse file \"%s\"\n", xml_file);
+		g_error("Error: unable to parse file \"%s\"\n", xml_file);
 		goto fail;
 	}
 
@@ -96,14 +96,14 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 	/* Create xpath evaluation context */
 	xpathCtx = xmlXPathNewContext(doc);
 	if(!xpathCtx) {
-		fprintf(stderr, "Error: unable to create new XPath context\n");
+		g_error("Error: unable to create new XPath context\n");
 		goto fail;
 	}
 
 	/* Register namespaces from list */
 	for (ns = namespaces; ns->href; ns++) {
 		if(xmlXPathRegisterNs(xpathCtx, ns->prefix, ns->href) != 0) {
-			fprintf(stderr, "Error: unable to register NS with prefix=\"%s\" and href=\"%s\"\n", ns->prefix, ns->href);
+			g_error("Error: unable to register NS with prefix=\"%s\" and href=\"%s\"\n", ns->prefix, ns->href);
 			goto fail;
 		}
 	}
@@ -119,7 +119,7 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 	for (xpath = xpaths; xpath->expr; xpath++) {
 		xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression(xpath->expr, xpathCtx);
 		if (!xpathObj) {
-			fprintf(stderr,"Error: unable to evaluate xpath expression \"%s\"\n", xpath->expr);
+			g_error("Error: unable to evaluate xpath expression \"%s\"\n", xpath->expr);
 			xmlXPathFreeObject(xpathObj);
 			goto fail;
 		}
@@ -191,7 +191,7 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 
 			if (strcmp("dataType", key) == 0) {
 				xmlNode *subnode;
-				guint16 index = strtou16(val, &endptr, 16);
+				guint16 idx = strtou16(val, &endptr, 16);
 				if (endptr == val) continue;
 
 				for (subnode = cur->children; subnode; subnode = subnode->next) {
@@ -200,11 +200,11 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 						struct dataType *type;
 						const struct dataTypeMap_in *ptr = epl_type_to_hf((char*)subnode->name);
 						if (!ptr) {
-							fprintf(stderr, "Skipping unknown type '%s'\n", subnode->name);
+							g_info("Skipping unknown type '%s'\n", subnode->name);
 							continue;
 						}
 						type = g_new(struct dataType, 1);
-						type->id = index;
+						type->id = idx;
 						type->ptr = ptr;
 						g_hash_table_insert(profile->data, &type->id, type);
 						continue;
@@ -228,11 +228,11 @@ parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 				  *val = (char*)attr->children->content;
 
 			if (strcmp("index", key) == 0) {
-				out->index = strtou16(val, &endptr, 16);
+				out->idx = strtou16(val, &endptr, 16);
 				if (val == endptr) return FALSE;
 
 			} else if (strcmp("subIndex", key) == 0) {
-				out->index = strtou16(val, &endptr, 16);
+				out->idx = strtou16(val, &endptr, 16);
 				if (val == endptr) return FALSE;
 
 			} else if (strcmp("name", key) == 0) {
@@ -281,8 +281,8 @@ populate_objectList(xmlNodeSetPtr nodes, void *data)
 
 		parse_obj_tag(cur, &tmpobj, data);
 
-		if (tmpobj.index) {
-			struct object *obj = profile_object_add(profile, tmpobj.index);
+		if (tmpobj.idx) {
+			struct object *obj = profile_object_add(profile, tmpobj.idx);
 			obj->info = tmpobj;
 
 			if (tmpobj.kind == 8 || tmpobj.kind == 9) {
@@ -297,7 +297,7 @@ populate_objectList(xmlNodeSetPtr nodes, void *data)
 
 					if (parse_obj_tag(subcur, &subobj.info, profile)) {
 						epl_wmem_iarray_insert(obj->subindices,
-								subobj.info.index, &subobj.range);
+								subobj.info.idx, &subobj.range);
 					}
 				}
 				epl_wmem_iarray_lock(obj->subindices);

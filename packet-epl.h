@@ -31,7 +31,7 @@ struct profile {
 };
 
 struct od_entry {
-	guint16 index;
+	guint16 idx;
 	guint8 kind; /* object type, is it aggregate or plain and so, FIXME needs better name */
 	char name[64];
 	const struct dataTypeMap_in *type;
@@ -48,7 +48,7 @@ struct object {
 
 
 struct profile *profile_new(wmem_allocator_t *scope, guint16 id);
-struct object *profile_object_add(struct profile *profile, guint16 index);
+struct object *profile_object_add(struct profile *profile, guint16 idx);
 
 #define CHECK_OVERLAP(x, x_len, y, y_len) ((x) <= (y) + ((y_len)-1) && (y) <= (x) + ((x_len)-1))
 
