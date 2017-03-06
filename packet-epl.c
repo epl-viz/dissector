@@ -1908,6 +1908,8 @@ gboolean epl_update_convo_cn_profile(struct epl_convo *convo, guint16 profile_id
 static struct object *
 object_lookup(struct profile *profile, guint16 idx)
 {
+	if (profile == NULL)
+		return NULL;
 	return wmem_map_lookup(profile->objects, &idx);
 }
 static struct subobject *
