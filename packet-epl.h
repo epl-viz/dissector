@@ -28,6 +28,7 @@ struct profile {
 	const char *name;
 	const char *path;
 	void *data;
+    wmem_array_t *object_mappings;
 };
 
 struct od_entry {
