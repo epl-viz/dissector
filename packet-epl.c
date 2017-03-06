@@ -1743,6 +1743,9 @@ struct object_mapping {
 	int offset;
 	int len;
 	/* info */
+	struct {
+		guint32 first, last;
+	} frame; /* frames for which object_mapping applies */
 	struct od_entry *info;
 	const char *index_name;
 	const char *title;
@@ -1760,14 +1763,20 @@ object_mapping_cmp(const void *a_, const void *b_) {
 	if (a->offset > b->offset) return +1;
 	return 0;
 }
+gboolean
+object_mapping_eq(struct object_mapping *a, struct object_mapping *b) {
+	return 	   a->param.index == b->param.index
+		&& a->param.subindex == b->param.subindex
+		&& a->frame.first == b->frame.first
+		&& a->frame.last == b->frame.last;
+}
 static guint
 add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping) {
 	/* A bit ineffecient (looping backwards would be better), but it's acyclic anyway */
 	guint i, len;
 	struct object_mapping *mappings = get_object_mappings(arr, &len);
 	for (i = 0; i < len; i++) {
-		if (mappings[i].param.index == mapping->param.index
-		&&  mappings[i].param.subindex == mapping->param.subindex) {
+		if (object_mapping_eq(&mappings[i], mapping)) {
 			mappings[i] = *mapping;
 			return len;
 		}
@@ -1816,6 +1825,8 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		proto_item *psf_item, *ti;
 		struct object_mapping *map = &mappings[i];
 		guint willbe_offset_bits = map->offset + map->len;
+
+		if (!(map->frame.first < pinfo->num && pinfo->num < map->frame.last)) continue;
 
 		if (willbe_offset_bits > rem_len * 8) {
 			break;
@@ -3701,6 +3712,8 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			proto_item *ti_obj, *ti_subobj;
 			struct object_mapping map = {0};
 			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
+			map.frame.first = pinfo->num;
+			map.frame.last   = G_MAXUINT32;
 
 			psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_mapping, tvb, offset, 1, ENC_NA);
 			psf_tree = proto_item_add_subtree(psf_item, ett_epl_asnd_sdo_cmd_data_mapping);
@@ -3748,8 +3761,17 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 
 			map.title = "PDO";
 
-
-			add_object_mapping(mappings, &map);
+			/* let's check if this overwrites an existing mapping */{
+				guint i, len;
+				struct object_mapping *old = get_object_mappings(mappings, &len);
+				for (i = 0; i < len; i++) {
+					if (CHECK_OVERLAP(old[i].offset, old[i].len, map.offset, map.len)
+							&& old[i].frame.first !=  map.frame.first) {
+						old[i].frame.last = pinfo->num;
+					}
+				}
+				add_object_mapping(mappings, &map);
+			}
 		}
 		else if (obj && obj->info.type)
 		{
@@ -5285,7 +5307,7 @@ profile_uat_fld_devicetype_check_cb(void *_record _U_, const char *str, guint le
 		*err = g_strdup("Invalid argument. Expected a decimal between [0-65535]");
 		return FALSE;
 	}
-	record->DeviceType = val;
+	record->DeviceType = (guint16)val;
 	return TRUE;
 }
 
