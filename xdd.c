@@ -14,7 +14,7 @@
 #include "wmem_iarray.h"
 
 static guint16
-strtou16(const char * str, char ** endptr, int base)
+my_strtou16(const char * str, char ** endptr, int base)
 {
 	unsigned long val = strtoul(str, endptr, base);
 	if (val > G_MAXUINT16) {
@@ -130,6 +130,13 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 		xmlXPathFreeObject(xpathObj);
 	}
 
+	/* We create ObjectMappings while reading the XML, this is makes it likely,
+	 * that we won't be able to reference a mapped object in the ObjectMapping
+	 * as we didn't reach its XML tag yet. Therefore, after reading the XDD
+	 * completely, we update mappings in the profile
+	 */
+	profile_object_mappings_update(profile);
+
 	return profile;
 fail:
 	if (profile && profile->data) {
@@ -189,9 +196,9 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 			char *endptr;
 			const char *key = (char*)attr->name, *val = (char*)attr->children->content;
 
-			if (strcmp("dataType", key) == 0) {
+			if (g_str_equal("dataType", key)) {
 				xmlNode *subnode;
-				guint16 idx = strtou16(val, &endptr, 16);
+				guint16 idx = my_strtou16(val, &endptr, 16);
 				if (endptr == val) continue;
 
 				for (subnode = cur->children; subnode; subnode = subnode->next) {
@@ -221,39 +228,51 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 static gboolean
 parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 		xmlAttrPtr attr;
+		const char *defaultValue = NULL, *actualValue = NULL, *value;
+		char *endptr;
 
 		for(attr = cur->properties; attr; attr = attr->next) {
-			char *endptr;
 			const char *key = (char*)attr->name,
 				  *val = (char*)attr->children->content;
 
-			if (strcmp("index", key) == 0) {
-				out->idx = strtou16(val, &endptr, 16);
+			if (g_str_equal("index", key)) {
+				out->idx = my_strtou16(val, &endptr, 16);
 				if (val == endptr) return FALSE;
 
-			} else if (strcmp("subIndex", key) == 0) {
-				out->idx = strtou16(val, &endptr, 16);
+			} else if (g_str_equal("subIndex", key)) {
+				out->idx = my_strtou16(val, &endptr, 16);
 				if (val == endptr) return FALSE;
 
-			} else if (strcmp("name", key) == 0) {
+			} else if (g_str_equal("name", key)) {
 				g_strlcpy(out->name, val, sizeof out->name);
 
-			} else if (strcmp("objectType", key) == 0) {
-				out->kind = strtou16(val, &endptr, 16);
+			} else if (g_str_equal("objectType", key)) {
+				out->kind = my_strtou16(val, &endptr, 16);
 
-			} else if (strcmp("dataType", key) == 0) {
-				guint16 id = strtou16(val, &endptr, 16);
+			} else if (g_str_equal("dataType", key)) {
+				guint16 id = my_strtou16(val, &endptr, 16);
 				if (endptr != val) {
 					struct dataType *type = g_hash_table_lookup(profile->data, &id);
-					if (type)
-						out->type = type->ptr;
+					if (type) out->type = type->ptr;
 				}
+
+			} else if (g_str_equal("defaultValue", key)) {
+				defaultValue = val;
+
+			} else if (g_str_equal("actualValue", key)) {
+				actualValue = val;
 			}
-			/*else if (strcmp("PDOmapping", key) == 0) {
+			/*else if (g_str_equal("PDOmapping", key)) {
 			  obj.PDOmapping = get_index(ObjectPDOmapping_tostr, val);
 			  assert(obj.PDOmapping >= 0);
 			  }*/
 		}
+
+		value = actualValue ? actualValue
+		      : defaultValue ? defaultValue
+		      : NULL;
+
+		out->value = value ? g_ascii_strtoull(value, &endptr, 0) : 0;
 
 		return TRUE;
 }
@@ -263,7 +282,7 @@ gboolean subobject_equal(gconstpointer _a, gconstpointer _b) {
 						  *b = &((struct subobject*)_b)->info;
 	return a->kind == b->kind
 		&& a->type == b->type
-		&& strcmp(a->name, b->name) == 0;
+		&& g_str_equal(a->name, b->name);
 }
 
 static int
@@ -298,6 +317,9 @@ populate_objectList(xmlNodeSetPtr nodes, void *data)
 					if (parse_obj_tag(subcur, &subobj.info, profile)) {
 						epl_wmem_iarray_insert(obj->subindices,
 								subobj.info.idx, &subobj.range);
+					}
+					if (subobj.info.value && profile_object_mapping_add(profile, obj->info.idx, subobj.info.idx, subobj.info.value)) {
+						g_info("Loaded mapping from XDC %s:%s", obj->info.name, subobj.info.name);
 					}
 				}
 				epl_wmem_iarray_lock(obj->subindices);

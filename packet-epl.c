@@ -1508,9 +1508,10 @@ static gint hf_epl_reassembled_data                          = -1;
 static gint hf_epl_asnd_identresponse_profile_path = -1;
 
 /* EPL OD Data Types */
-static gint hf_epl_pdo                 = -1;
-static gint hf_epl_od_index           = -1;
-static gint hf_epl_od_subindex        = -1;
+static gint hf_epl_pdo                = -1;
+static gint hf_epl_pdo_index          = -1;
+static gint hf_epl_pdo_subindex       = -1;
+static gint hf_epl_pdo_meta_info      = -1;
 
 static gint hf_epl_od_boolean         = -1;
 static gint hf_epl_od_integer8        = -1;
@@ -1546,6 +1547,7 @@ static const struct dataTypeMap_in {
 	guint encoding;
 } dataTypeMap_in[] = {
 	{ "Boolean",        &hf_epl_od_boolean,   ENC_LITTLE_ENDIAN },
+	/* integer types */
 	{ "Integer8",       &hf_epl_od_integer8 , ENC_LITTLE_ENDIAN },
 	{ "Integer16",      &hf_epl_od_integer16, ENC_LITTLE_ENDIAN },
 	{ "Integer24",      &hf_epl_od_integer24, ENC_LITTLE_ENDIAN },
@@ -1554,6 +1556,19 @@ static const struct dataTypeMap_in {
 	{ "Integer48",      &hf_epl_od_integer48, ENC_LITTLE_ENDIAN },
 	{ "Integer56",      &hf_epl_od_integer56, ENC_LITTLE_ENDIAN },
 	{ "Integer64",      &hf_epl_od_integer64, ENC_LITTLE_ENDIAN },
+
+	{ "Unsigned8",  SIZE_TO_UNSIGNED_HF(1), ENC_LITTLE_ENDIAN },
+	{ "Unsigned16", SIZE_TO_UNSIGNED_HF(2), ENC_LITTLE_ENDIAN },
+	{ "Unsigned24", SIZE_TO_UNSIGNED_HF(3), ENC_LITTLE_ENDIAN },
+	{ "Unsigned32", SIZE_TO_UNSIGNED_HF(4), ENC_LITTLE_ENDIAN },
+	{ "Unsigned40", SIZE_TO_UNSIGNED_HF(5), ENC_LITTLE_ENDIAN },
+	{ "Unsigned48", SIZE_TO_UNSIGNED_HF(6), ENC_LITTLE_ENDIAN },
+	{ "Unsigned56", SIZE_TO_UNSIGNED_HF(7), ENC_LITTLE_ENDIAN },
+	{ "Unsigned64", SIZE_TO_UNSIGNED_HF(8), ENC_LITTLE_ENDIAN },
+
+	/* non-integer types */
+
+
 	{ "Real32",         &hf_epl_od_real32,    ENC_LITTLE_ENDIAN },
 	{ "Real64",         &hf_epl_od_real64,    ENC_LITTLE_ENDIAN },
 	{ "Visible_String", &hf_epl_od_visible_string,  ENC_ASCII },
@@ -1567,17 +1582,9 @@ static const struct dataTypeMap_in {
 	{ "MAC_ADDRESS",    &hf_epl_od_mac,    ENC_BIG_ENDIAN },
 	{ "IP_ADDRESS",     &hf_epl_od_ipv4,   ENC_BIG_ENDIAN },
 
-	{ "Unsigned8",  SIZE_TO_UNSIGNED_HF(1), ENC_LITTLE_ENDIAN },
-	{ "Unsigned16", SIZE_TO_UNSIGNED_HF(2), ENC_LITTLE_ENDIAN },
-	{ "Unsigned24", SIZE_TO_UNSIGNED_HF(3), ENC_LITTLE_ENDIAN },
-	{ "Unsigned32", SIZE_TO_UNSIGNED_HF(4), ENC_LITTLE_ENDIAN },
-	{ "Unsigned40", SIZE_TO_UNSIGNED_HF(5), ENC_LITTLE_ENDIAN },
-	{ "Unsigned48", SIZE_TO_UNSIGNED_HF(6), ENC_LITTLE_ENDIAN },
-	{ "Unsigned56", SIZE_TO_UNSIGNED_HF(7), ENC_LITTLE_ENDIAN },
-	{ "Unsigned64", SIZE_TO_UNSIGNED_HF(8), ENC_LITTLE_ENDIAN },
-
 	{ NULL, NULL }
 };
+
 
 const struct dataTypeMap_in *epl_type_to_hf(const char *name) {
 	const struct dataTypeMap_in *entry;
@@ -1657,6 +1664,9 @@ static expert_field ei_real_length_differs    = EI_INIT;
 static dissector_handle_t epl_handle;
 
 static gboolean show_cmd_layer_for_duplicated = FALSE;
+static gboolean show_pdo_meta_info = FALSE;
+static gboolean read_xdc_for_mappings = TRUE;
+
 static gint ett_epl_asnd_sdo_data_reassembled = -1;
 
 static reassembly_table epl_reassembly_table;
@@ -1716,19 +1726,26 @@ object_mapping_eq(struct object_mapping *a, struct object_mapping *b) {
 	return 	(  a->pdo.idx == b->pdo.idx
 		&& a->pdo.subindex == b->pdo.subindex
 		&& a->frame.first == b->frame.first
-		&& a->frame.last == b->frame.last)
-	||      (  a->param.idx == b->param.idx
+		&& a->frame.last == b->frame.last
+		&& a->param.idx == b->param.idx
 		&& a->param.subindex == b->param.subindex);
 }
 static guint
 add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping) {
-	/* A bit ineffecient (looping backwards would be better), but it's acyclic anyway */
+	/* let's check if this overwrites an existing mapping */
 	guint i, len;
-	struct object_mapping *mappings = get_object_mappings(arr, &len);
+	/* A bit ineffecient (looping backwards would be better), but it's acyclic anyway */
+	struct object_mapping *old = get_object_mappings(arr, &len);
 	for (i = 0; i < len; i++) {
-		if (object_mapping_eq(&mappings[i], mapping)) {
-			mappings[i] = *mapping;
+		/* XXX handle here object mapping changing*/
+		if (object_mapping_eq(&old[i], mapping)) {
+			old[i] = *mapping;
 			return len;
+		}
+
+		if (CHECK_OVERLAP(old[i].offset, old[i].len, mapping->offset, mapping->len)
+				&& old[i].frame.first < mapping->frame.first) {
+			old[i].frame.last = mapping->frame.first;
 		}
 	}
 
@@ -1749,7 +1766,8 @@ profile_new(wmem_allocator_t *scope, guint16 id)
 	profile->objects = wmem_map_new(scope, epl_g_int16_hash, epl_g_int16_equal);
 	profile->name = NULL;
 	profile->path = NULL;
-	profile->object_mappings = wmem_array_new(scope, sizeof (struct object_mapping));
+	profile->RPDO = wmem_array_new(scope, sizeof (struct object_mapping));
+	profile->TPDO = wmem_array_new(scope, sizeof (struct object_mapping));
 
 	wmem_map_insert(epl_profiles, &profile->id, profile);
 	return profile;
@@ -1767,9 +1785,66 @@ profile_object_add(struct profile *profile, guint16 idx)
 }
 
 gboolean
-profile_add_object_mapping(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping) {
-	tvbuff_t *tvb = tvb_new_real_data((guint8*)&mapping, sizeof mapping, sizeof mapping);
-	return dissect_object_mapping(profile, profile->object_mappings, NULL, tvb, 0, 0, idx, subindex) == sizeof mapping;
+profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping) {
+	
+	wmem_array_t *mappings;
+	tvbuff_t *tvb;
+
+	if (!read_xdc_for_mappings) {
+		return FALSE;
+	}
+	if(idx == EPL_SOD_PDO_RX_MAPP && subindex >= 0x01 && subindex <= 0xfe) {
+		mappings = profile->RPDO;
+	} else if (idx == EPL_SOD_PDO_TX_MAPP && subindex >= 0x01 && subindex <= 0xfe) {
+		mappings = profile->TPDO;
+	} else {
+		return FALSE;
+	}
+	// FIXME: expects little endian
+	tvb = tvb_new_real_data((guint8*)&mapping, sizeof mapping, sizeof mapping);
+
+	return dissect_object_mapping(profile, mappings, NULL, tvb, 0, 0, idx, subindex) == sizeof mapping;
+}
+
+static struct object *object_lookup(struct profile *profile, guint16 idx);
+static struct subobject *subobject_lookup(struct object *obj, guint8 subindex);
+
+gboolean profile_object_mappings_update(struct profile *profile) {
+	gboolean updated_any = FALSE;
+	guint i, len;
+	struct object_mapping *mappings;
+	wmem_array_t *PDOs[3], **PDO;
+
+	if (!read_xdc_for_mappings) {
+		return FALSE;
+	}
+
+	PDOs[0] = profile->RPDO;
+	PDOs[1] = profile->TPDO;
+	PDOs[2] = NULL;
+
+	for (PDO = PDOs; *PDO; PDO++)
+	{
+		len = wmem_array_get_count(*PDO);
+		mappings = wmem_array_get_raw(*PDO);
+
+		for (i = 0; i < len; i++) {
+			struct object_mapping *map = &mappings[i];
+			struct object *mapping_obj;
+			struct subobject *mapping_subobj;
+
+			if (!(mapping_obj = object_lookup(profile, map->pdo.idx)))
+				continue;
+			map->info = &mapping_obj->info;
+			map->index_name = map->info->name;
+			updated_any = TRUE;
+			if (!(mapping_subobj = subobject_lookup(mapping_obj, map->pdo.subindex)))
+				continue;
+			map->info = &mapping_subobj->info;
+		}
+	}
+
+	return updated_any;
 }
 
 
@@ -1829,35 +1904,47 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 
 
 	for (i = 0; i < maps_count; i++) {
-		proto_tree *psf_tree;
+		proto_tree *pdo_tree;
 		proto_item *psf_item, *ti;
 		struct object_mapping *map = &mappings[i];
 		guint willbe_offset_bits = map->offset + map->len;
 
-		if (!(map->frame.first < pinfo->num && pinfo->num < map->frame.last)) continue;
+		if (!(map->frame.first < pinfo->num && pinfo->num < map->frame.last)) {
+			continue;
+		}
 
 		if (willbe_offset_bits > rem_len * 8) {
 			break;
 		}
 
 		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", map->title);
-		psf_tree = proto_item_add_subtree(psf_item, ett_epl_pdo);
+		pdo_tree = proto_item_add_subtree(psf_item, ett_epl_pdo);
 
-		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_od_index, payload_tvb, 0, 0, map->pdo.idx, "%04X", map->pdo.idx);
+		ti = proto_tree_add_uint_format_value(pdo_tree, hf_epl_pdo_index, payload_tvb, 0, 0, map->pdo.idx, "%04X", map->pdo.idx);
 		PROTO_ITEM_SET_GENERATED(ti);
 		if (map->info)
 			proto_item_append_text (ti, " (%s)", map->index_name);
 
-		ti = proto_tree_add_uint_format_value(psf_tree, hf_epl_od_subindex, payload_tvb, 0, 0, map->pdo.subindex, "%02X", map->pdo.subindex);
+
+		ti = proto_tree_add_uint_format_value(pdo_tree, hf_epl_pdo_subindex, payload_tvb, 0, 0, map->pdo.subindex, "%02X", map->pdo.subindex);
 		PROTO_ITEM_SET_GENERATED(ti);
 		if (map->info)
 			proto_item_append_text (ti, " (%s)", map->info->name);
 
+		if (show_pdo_meta_info)
+		{
+			ti = proto_tree_add_string_format(pdo_tree, hf_epl_asnd_identresponse_profile_path, tvb, 0, 0,
+					"", "Mapping set by %04X:%02X, Life time: Frame #%u-#%u, Offset: %04x, Length %u bits",
+					map->param.idx, map->param.subindex, map->frame.first, map->frame.last, map->offset, map->len
+					);
+			PROTO_ITEM_SET_GENERATED(ti);
+		}
+
 		if (map->info && map->info->type) {
-			proto_tree_add_item(psf_tree, *map->info->type->hf, payload_tvb,
+			proto_tree_add_item(pdo_tree, *map->info->type->hf, payload_tvb,
 					map->offset / 8, map->len / 8, map->info->type->encoding);
 		} else { 
-			dissect_epl_payload_fallback(psf_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType); 
+			dissect_epl_payload_fallback(pdo_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType); 
 		}
 		// FIXME: check if there's more data, if so call dissect_epl_payload
 
@@ -1900,6 +1987,19 @@ gboolean epl_update_convo_cn_profile(struct epl_convo *convo, guint16 profile_id
 	struct profile *profile;
 	if ((profile = (struct profile*)wmem_map_lookup(epl_profiles, &profile_id))) {
 		convo->profiles.CN = profile;
+		// TODO: leaks memory when profile is changed 
+		if (!wmem_array_get_count(convo->RPDO)) {
+			wmem_array_append(convo->RPDO,
+				wmem_array_get_raw(profile->RPDO),
+				wmem_array_get_count(profile->RPDO)
+			);
+		}
+		if (!wmem_array_get_count(convo->TPDO)) {
+			wmem_array_append(convo->TPDO,
+				wmem_array_get_raw(profile->TPDO),
+				wmem_array_get_count(profile->TPDO)
+			);
+		}
 		return TRUE;
 	}
 	return FALSE;
@@ -3792,17 +3892,7 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 
 	map.title = "PDO";
 
-	/* let's check if this overwrites an existing mapping */{
-		guint i, len;
-		struct object_mapping *old = get_object_mappings(mappings, &len);
-		for (i = 0; i < len; i++) {
-			if (CHECK_OVERLAP(old[i].offset, old[i].len, map.offset, map.len)
-					&& old[i].frame.first !=  map.frame.first) {
-				old[i].frame.last = framenum;
-			}
-		}
-		add_object_mapping(mappings, &map);
-	}
+	add_object_mapping(mappings, &map);
 
 	return offset;
 }
@@ -4994,13 +5084,17 @@ proto_register_epl(void)
 			{ "PDO", "epl-xdd.pdo",
 				FT_STRING, STR_ASCII, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_od_index,
+		{ &hf_epl_pdo_index,
 			{ "Index", "epl-xdd.pdo.index",
 				FT_UINT16, BASE_HEX, NULL, 0x00, NULL, HFILL }
 		},
-		{ &hf_epl_od_subindex,
+		{ &hf_epl_pdo_subindex,
 			{ "SubIndex", "epl-xdd.pdo.subindex",
 				FT_UINT8, BASE_HEX, NULL, 0x00, NULL, HFILL }
+		},
+		{ &hf_epl_pdo_meta_info,
+			{ "Meta Info", "epl-xdd.pdo.meta",
+				FT_STRING, STR_UNICODE, NULL, 0x00, NULL, HFILL }
 		},
 
 		{ &hf_epl_od_boolean,
@@ -5206,6 +5300,12 @@ proto_register_epl(void)
 
 	prefs_register_bool_preference(epl_module, "show_duplicated_command_layer", "Show command-layer in duplicated frames",
 		"For analysis purposes one might want to show the command layer even if the dissectore assumes a duplicated frame", &show_cmd_layer_for_duplicated);
+
+	prefs_register_bool_preference(epl_module, "show_pdo_meta_info", "Show life times and origin PDO Tx/Rx params for PDO entries",
+		"For analysis purposes one might want to see how long the current mapping has been active for and what OD write caused it", &show_pdo_meta_info);
+
+	prefs_register_bool_preference(epl_module, "read_xdc_for_mappings", "Read ObjectMappings from XDC",
+		"If you want to parse the defaultValue (XDD) and actualValue (XDC) attributes for ObjectMappings in order to detect default PDO mappings, which may not be exchanged over SDO ", &read_xdc_for_mappings);
 
 	epl_profiles = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
 

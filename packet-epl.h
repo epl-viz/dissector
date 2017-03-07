@@ -28,7 +28,8 @@ struct profile {
 	const char *name;
 	const char *path;
 	void *data;
-    wmem_array_t *object_mappings;
+    wmem_array_t *TPDO; /* CN->MN */
+    wmem_array_t *RPDO; /* MN->CN */
 };
 
 struct od_entry {
@@ -36,6 +37,7 @@ struct od_entry {
 	guint8 kind; /* object type, is it aggregate or plain and so, FIXME needs better name */
 	char name[64];
 	const struct dataTypeMap_in *type;
+	guint64 value;
 };
 
 struct subobject {
@@ -50,6 +52,8 @@ struct object {
 
 struct profile *profile_new(wmem_allocator_t *scope, guint16 id);
 struct object *profile_object_add(struct profile *profile, guint16 idx);
+gboolean profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping);
+gboolean profile_object_mappings_update(struct profile *profile);
 
 #define CHECK_OVERLAP(x, x_len, y, y_len) ((x) <= (y) + ((y_len)-1) && (y) <= (x) + ((x_len)-1))
 
