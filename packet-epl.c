@@ -1789,6 +1789,7 @@ profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex
 	
 	wmem_array_t *mappings;
 	tvbuff_t *tvb;
+	guint64 mapping_le;
 
 	if (!read_xdc_for_mappings) {
 		return FALSE;
@@ -1800,7 +1801,8 @@ profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex
 	} else {
 		return FALSE;
 	}
-	// FIXME: expects little endian
+
+	phtolell(((guint8*)&mapping_le), mapping);
 	tvb = tvb_new_real_data((guint8*)&mapping, sizeof mapping, sizeof mapping);
 
 	return dissect_object_mapping(profile, mappings, NULL, tvb, 0, 0, idx, subindex) == sizeof mapping;
