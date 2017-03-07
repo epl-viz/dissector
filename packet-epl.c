@@ -828,7 +828,6 @@ static const value_string sod_cmd_str_no_sub[] = {
 static value_string_ext sod_cmd_no_sub = VALUE_STRING_EXT_INIT(sod_cmd_str_no_sub);
 
 static const value_string sod_idx_names[] = {
-	/* FIXME: remove this, if XDD covers it */
 	/* SDO directory names */
 	{0x10000000, "NMT_DeviceType_U32"},
 	{0x10010000, "ERR_ErrorRegister_U8"},
@@ -1527,8 +1526,8 @@ static gint hf_epl_od_real64          = -1;
 static gint hf_epl_od_visible_string  = -1;
 static gint hf_epl_od_octet_string    = -1;
 static gint hf_epl_od_unicode_string  = -1;
-static gint hf_epl_od_time_of_day     = -1;
-static gint hf_epl_od_time_difference = -1;
+/*static gint hf_epl_od_time_of_day     = -1;*/
+/*static gint hf_epl_od_time_difference = -1;*/
 static gint hf_epl_od_nettime         = -1;
 
 static gint hf_epl_od_domain     = -1;
@@ -1586,9 +1585,12 @@ static const struct dataTypeMap_in {
 };
 
 
-const struct dataTypeMap_in *epl_type_to_hf(const char *name) {
+const struct
+dataTypeMap_in *epl_type_to_hf(const char *name)
+{
 	const struct dataTypeMap_in *entry;
-	for (entry = dataTypeMap_in; entry->name; entry++) {
+	for (entry = dataTypeMap_in; entry->name; entry++)
+	{
 		if (strcmp(name, entry->name) == 0)
 			return entry;
 	}
@@ -1694,7 +1696,7 @@ struct object_mapping {
 	struct {
 		guint16 idx;
 		guint8 subindex;
-	} pdo, /* The PDO to be mapped */
+	} pdo,   /* The PDO to be mapped */
 	  param; /* The ObjectMapping OD entry that mapped it */
 	/* in bits */
 	int offset;
@@ -1709,12 +1711,14 @@ struct object_mapping {
 };
 
 static struct object_mapping *
-get_object_mappings(wmem_array_t *arr, guint *len) {
+get_object_mappings(wmem_array_t *arr, guint *len)
+{
 	*len = wmem_array_get_count(arr);
 	return wmem_array_get_raw(arr);
 }
 int
-object_mapping_cmp(const void *a_, const void *b_) {
+object_mapping_cmp(const void *a_, const void *b_)
+{
 	const struct object_mapping *a = a_, *b = b_;
 
 	if (a->offset < b->offset) return -1;
@@ -1722,7 +1726,8 @@ object_mapping_cmp(const void *a_, const void *b_) {
 	return 0;
 }
 gboolean
-object_mapping_eq(struct object_mapping *a, struct object_mapping *b) {
+object_mapping_eq(struct object_mapping *a, struct object_mapping *b)
+{
 	return 	(  a->pdo.idx == b->pdo.idx
 		&& a->pdo.subindex == b->pdo.subindex
 		&& a->frame.first == b->frame.first
@@ -1731,20 +1736,24 @@ object_mapping_eq(struct object_mapping *a, struct object_mapping *b) {
 		&& a->param.subindex == b->param.subindex);
 }
 static guint
-add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping) {
+add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping)
+{
 	/* let's check if this overwrites an existing mapping */
 	guint i, len;
 	/* A bit ineffecient (looping backwards would be better), but it's acyclic anyway */
 	struct object_mapping *old = get_object_mappings(arr, &len);
-	for (i = 0; i < len; i++) {
-		/* XXX handle here object mapping changing*/
-		if (object_mapping_eq(&old[i], mapping)) {
+	for (i = 0; i < len; i++)
+	{
+		/* XXX Test this more */
+		if (object_mapping_eq(&old[i], mapping))
+		{
 			old[i] = *mapping;
 			return len;
 		}
 
 		if (CHECK_OVERLAP(old[i].offset, old[i].len, mapping->offset, mapping->len)
-				&& old[i].frame.first < mapping->frame.first) {
+				&& old[i].frame.first < mapping->frame.first)
+		{
 			old[i].frame.last = mapping->frame.first;
 		}
 	}
@@ -1785,22 +1794,22 @@ profile_object_add(struct profile *profile, guint16 idx)
 }
 
 gboolean
-profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping) {
+profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping)
+{
 	
 	wmem_array_t *mappings;
 	tvbuff_t *tvb;
 	guint64 mapping_le;
 
-	if (!read_xdc_for_mappings) {
+	if (!read_xdc_for_mappings)
 		return FALSE;
-	}
-	if(idx == EPL_SOD_PDO_RX_MAPP && subindex >= 0x01 && subindex <= 0xfe) {
+
+	if(idx == EPL_SOD_PDO_RX_MAPP && subindex >= 0x01 && subindex <= 0xfe)
 		mappings = profile->RPDO;
-	} else if (idx == EPL_SOD_PDO_TX_MAPP && subindex >= 0x01 && subindex <= 0xfe) {
+	else if (idx == EPL_SOD_PDO_TX_MAPP && subindex >= 0x01 && subindex <= 0xfe)
 		mappings = profile->TPDO;
-	} else {
+	else
 		return FALSE;
-	}
 
 	phtolell(((guint8*)&mapping_le), mapping);
 	tvb = tvb_new_real_data((guint8*)&mapping, sizeof mapping, sizeof mapping);
@@ -1811,15 +1820,17 @@ profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex
 static struct object *object_lookup(struct profile *profile, guint16 idx);
 static struct subobject *subobject_lookup(struct object *obj, guint8 subindex);
 
-gboolean profile_object_mappings_update(struct profile *profile) {
+gboolean
+profile_object_mappings_update(struct profile *profile)
+{
 	gboolean updated_any = FALSE;
 	guint i, len;
 	struct object_mapping *mappings;
 	wmem_array_t *PDOs[3], **PDO;
 
-	if (!read_xdc_for_mappings) {
+	if (!read_xdc_for_mappings)
 		return FALSE;
-	}
+
 
 	PDOs[0] = profile->RPDO;
 	PDOs[1] = profile->TPDO;
@@ -1830,7 +1841,8 @@ gboolean profile_object_mappings_update(struct profile *profile) {
 		len = wmem_array_get_count(*PDO);
 		mappings = wmem_array_get_raw(*PDO);
 
-		for (i = 0; i < len; i++) {
+		for (i = 0; i < len; i++)
+		{
 			struct object_mapping *map = &mappings[i];
 			struct object *mapping_obj;
 			struct subobject *mapping_subobj;
@@ -1853,17 +1865,18 @@ gboolean profile_object_mappings_update(struct profile *profile) {
 static address convo_mac;
 
 static conversation_t *
-find_or_create_conversation_epl(packet_info *pinfo, guint8 cn_addr) {
+find_or_create_conversation_epl(packet_info *pinfo, guint8 cn_addr)
+{
 	conversation_t *convo;
 
 	/* I2C port is also single octet wide */
 	if ((convo = find_conversation(pinfo->num, &convo_mac, &convo_mac, PT_I2C,
-					cn_addr, cn_addr, NO_ADDR_B|NO_PORT_B))) {
+					cn_addr, cn_addr, NO_ADDR_B|NO_PORT_B)))
+	{
 		//TODO: use conversation template?
 
-		if (pinfo->num > convo->last_frame) {
+		if (pinfo->num > convo->last_frame)
 			convo->last_frame = pinfo->num;
-		}
 	} else {
 		convo = conversation_new(pinfo->num, &convo_mac, &convo_mac, PT_I2C,
 				cn_addr, cn_addr, NO_ADDR2|NO_PORT2);
@@ -1897,7 +1910,6 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 	guint i, maps_count;
 	guint off = 0;
 
-	// TODO: what if some are set via SDO and some are set via XDC
 	struct object_mapping *mappings = get_object_mappings(mapping, &maps_count);
 
 	rem_len = tvb_captured_length_remaining(tvb, offset);
@@ -1905,19 +1917,18 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 	rem_len = tvb_captured_length_remaining(payload_tvb, 0);
 
 
-	for (i = 0; i < maps_count; i++) {
+	for (i = 0; i < maps_count; i++)
+	{
 		proto_tree *pdo_tree;
 		proto_item *psf_item, *ti;
 		struct object_mapping *map = &mappings[i];
 		guint willbe_offset_bits = map->offset + map->len;
 
-		if (!(map->frame.first < pinfo->num && pinfo->num < map->frame.last)) {
+		if (!(map->frame.first < pinfo->num && pinfo->num < map->frame.last))
 			continue;
-		}
 
-		if (willbe_offset_bits > rem_len * 8) {
+		if (willbe_offset_bits > rem_len * 8)
 			break;
-		}
 
 		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", map->title);
 		pdo_tree = proto_item_add_subtree(psf_item, ett_epl_pdo);
@@ -1942,21 +1953,21 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 			PROTO_ITEM_SET_GENERATED(ti);
 		}
 
-		if (map->info && map->info->type) {
+		if (map->info && map->info->type)
+		{
 			proto_tree_add_item(pdo_tree, *map->info->type->hf, payload_tvb,
 					map->offset / 8, map->len / 8, map->info->type->encoding);
 		} else { 
 			dissect_epl_payload_fallback(pdo_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType); 
 		}
-		// FIXME: check if there's more data, if so call dissect_epl_payload
-
 
 		off = willbe_offset_bits / 8;
 	}
 
 	/* If we don't have enough information, resport to data dissector */
 	rem_len = tvb_captured_length_remaining(payload_tvb, off);
-	if (rem_len) {
+	if (rem_len)
+	{
 		return dissect_epl_payload_fallback(epl_tree, payload_tvb, pinfo, off, rem_len, msgType);
 	}
 	return offset + len;
@@ -1985,18 +1996,23 @@ epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 	return convo;
 }
 
-gboolean epl_update_convo_cn_profile(struct epl_convo *convo, guint16 profile_id) {
+gboolean
+epl_update_convo_cn_profile(struct epl_convo *convo, guint16 profile_id)
+{
 	struct profile *profile;
-	if ((profile = (struct profile*)wmem_map_lookup(epl_profiles, &profile_id))) {
+	if ((profile = (struct profile*)wmem_map_lookup(epl_profiles, &profile_id)))
+	{
 		convo->profiles.CN = profile;
-		// TODO: leaks memory when profile is changed 
-		if (!wmem_array_get_count(convo->RPDO)) {
+		// TODO: leaks memory when profile is changed?
+		if (!wmem_array_get_count(convo->RPDO))
+		{
 			wmem_array_append(convo->RPDO,
 				wmem_array_get_raw(profile->RPDO),
 				wmem_array_get_count(profile->RPDO)
 			);
 		}
-		if (!wmem_array_get_count(convo->TPDO)) {
+		if (!wmem_array_get_count(convo->TPDO))
+		{
 			wmem_array_append(convo->TPDO,
 				wmem_array_get_raw(profile->TPDO),
 				wmem_array_get_count(profile->TPDO)
@@ -2458,10 +2474,12 @@ dissect_epl_payload_fallback(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *p
 			expert_add_info(pinfo, item, &ei_real_length_differs );
 		}
 
-		if ( ! dissector_try_heuristic(heur_epl_data_subdissector_list, payload_tvb, pinfo, epl_tree, &hdtbl_entry, &msgType)) {
+		if ( ! dissector_try_heuristic(heur_epl_data_subdissector_list, payload_tvb, pinfo, epl_tree, &hdtbl_entry, &msgType))
+		{
 			/* We don't know the type, so let's use appropriate unsignedX */
 			gint *hf = SIZE_TO_UNSIGNED_HF(len);
-			if (hf) {
+			if (hf)
+			{
 				proto_tree_add_item(epl_tree, *hf, payload_tvb, 0, len, ENC_LITTLE_ENDIAN);
 			} else {
 				call_data_dissector(payload_tvb, pinfo, epl_tree);
@@ -3055,10 +3073,12 @@ dissect_epl_asnd_ires(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *t
 
 	ti = proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_profile, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 	epl_update_convo_cn_profile(convo, convo->DeviceType);
-	if (convo->profiles.CN) {
+	if (convo->profiles.CN)
+	{
 		if (convo->profiles.CN->name)
 			proto_item_append_text(ti, " (%s)", convo->profiles.CN->name);
-		if (convo->profiles.CN->path) {
+		if (convo->profiles.CN->path)
+		{
 			ti = proto_tree_add_string(epl_tree, hf_epl_asnd_identresponse_profile_path, tvb, offset, 2, convo->profiles.CN->path);
 			PROTO_ITEM_SET_GENERATED(ti);
 		}
@@ -3612,7 +3632,8 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 			/* look up index in registered profile */
 			obj = object_lookup(convo->profiles.CN, idx);
-			if (!obj) {
+			if (!obj)
+			{
 				/* value to string */
 				index_str = rval_to_str_const(idx, sod_cmd_str, "unknown");
 				/* get index string value */
@@ -3674,7 +3695,8 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			if(sub_val != error)
 				idx = sub_val;
 
-			if (subobj) {
+			if (subobj)
+			{
 				psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, offset, 1, ENC_LITTLE_ENDIAN);
 				proto_item_append_text(psf_item, " (%s)", subobj->info.name);
 				col_append_fstr(pinfo->cinfo, COL_INFO, "/%s)", subobj->info.name);
@@ -3698,7 +3720,8 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 				col_append_fstr(pinfo->cinfo, COL_INFO, "/ObjectMapping)");
 			}
 			/* no subindex */
-			else if(nosub != error) {
+			else if(nosub != error)
+			{
 				col_append_fstr(pinfo->cinfo, COL_INFO, ")");
 			}
 			/* if the subindex has the value 0x00 */
@@ -3840,19 +3863,22 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	map.frame.first = framenum;
 	map.frame.last   = G_MAXUINT32;
 
-	if (epl_tree) {
+	if (epl_tree)
+	{
 		psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_mapping, tvb, offset, 1, ENC_NA);
 		psf_tree = proto_item_add_subtree(psf_item, ett_epl_asnd_sdo_cmd_data_mapping);
 	}
 
 	map.pdo.idx = tvb_get_letohs(tvb, offset);
-	if (epl_tree) {
+	if (epl_tree)
+	{
 		ti_obj = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, offset, 2, map.pdo.idx,"Index: 0x%04X", map.pdo.idx);
 	}
 	offset += 2;
 
 	map.pdo.subindex = tvb_get_guint8(tvb, offset);
-	if (epl_tree) {
+	if (epl_tree)
+	{
 		ti_subobj = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, offset, 1, map.pdo.subindex, "SubIndex: 0x%02X", map.pdo.subindex);
 	}
 	offset += 2;
@@ -3862,17 +3888,21 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 		struct object *mapping_obj;
 		struct subobject *mapping_subobj;
 		mapping_obj = object_lookup(profile, map.pdo.idx);
-		if (mapping_obj) {
+		if (mapping_obj)
+		{
 			map.info = &mapping_obj->info;
 			map.index_name = map.info->name;
-			if (epl_tree) {
+			if (epl_tree)
+			{
 				proto_item_append_text (ti_obj, " (%s)", map.info->name);
 			}
 
 			mapping_subobj = subobject_lookup(mapping_obj, map.pdo.subindex);
-			if (mapping_subobj) {
+			if (mapping_subobj)
+			{
 				map.info = &mapping_subobj->info;
-				if (epl_tree) {
+				if (epl_tree)
+				{
 					proto_item_append_text (ti_subobj, " (%s)", map.info->name);
 				}
 			}
@@ -3886,7 +3916,8 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	offset += 2;
 
 	map.len = tvb_get_guint8(tvb, offset);
-	if (epl_tree) {
+	if (epl_tree)
+	{
 		psf_item = proto_tree_add_item(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_length, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 		proto_item_append_text(psf_item, " bits");
 	}
@@ -4429,12 +4460,10 @@ proto_register_epl(void)
 			{ "PResTimeFirstValid", "epl-xdd.soa.prft",
 				FT_BOOLEAN, 8, NULL, EPL_SOA_SYNC_PRES_FIRST, NULL, HFILL }
 		},
-		// XXX: Darf er das?
 		{ &hf_epl_soa_pre_set ,
 			{ "PResModeSet", "epl-xdd.soa.prmst",
 				FT_BOOLEAN, 8, NULL, EPL_SOA_SYNC_PRES_SET, NULL, HFILL }
 		},
-		// XXX: Darf er das?
 		{ &hf_epl_soa_pre_res,
 			{ "PResModeReset", "epl-xdd.soa.prmrst",
 				FT_BOOLEAN, 8, NULL, EPL_SOA_SYNC_PRES_RESET, NULL, HFILL }
@@ -4739,7 +4768,6 @@ proto_register_epl(void)
 			{ "SyncDelayStation", "epl-xdd.asnd.syncresponse.delay.station",
 				FT_UINT8, BASE_DEC, NULL, 0x00, NULL, HFILL }
 		},
-		// XXX check if change here was correct
 		{ &hf_epl_asnd_syncResponse_delay,
 			{ "SyncDelay", "epl-xdd.asnd.syncresponse.delay",
 				FT_UINT8, BASE_DEC, NULL, 0x00, NULL, HFILL }
@@ -5361,7 +5389,9 @@ proto_reg_handoff_epl(void)
 	register_cleanup_routine( cleanup_dissector );
 }
 
-static void reload_xdd(void *key, void *value, void *user_data _U_) {
+static void
+reload_xdd(void *key, void *value, void *user_data _U_)
+{
 	struct profile *old_profile = *(struct profile**)value;
 	(void)old_profile;
 	wmem_map_remove(epl_profiles, key);
@@ -5373,10 +5403,12 @@ profile_parse_uat(void)
 	guint i;
 	struct profile *profile;
 	wmem_map_foreach(epl_profiles, reload_xdd, NULL);
-        for (i = 0; i < nprofile_uat; i++) {
+        for (i = 0; i < nprofile_uat; i++)
+        {
             struct profile_uat_assoc *uat = &(profile_list_uats[i]);
 		profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
-		if (profile) {
+		if (profile)
+		{
 			g_info("Loading %s\n", profile->path);
 			wmem_map_insert(epl_profiles, &profile->id, profile);
 		}
@@ -5411,7 +5443,8 @@ profile_uat_fld_devicetype_check_cb(void *_record _U_, const char *str, guint le
 
 	char *endptr;
 	unsigned long val = strtoul(str, &endptr, 10);
-	if (val > G_MAXUINT16 || endptr != str + len) {
+	if (val > G_MAXUINT16 || endptr != str + len)
+	{
 		*err = g_strdup("Invalid argument. Expected a decimal between [0-65535]");
 		return FALSE;
 	}

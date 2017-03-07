@@ -17,7 +17,8 @@ static guint16
 my_strtou16(const char * str, char ** endptr, int base)
 {
 	unsigned long val = strtoul(str, endptr, base);
-	if (val > G_MAXUINT16) {
+	if (val > G_MAXUINT16)
+	{
 		val = G_MAXUINT16;
 		errno = ERANGE;
 	}
@@ -87,7 +88,8 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 
 	/* Load XML document */
 	doc = xmlParseFile(xml_file);
-	if (!doc) {
+	if (!doc)
+	{
 		g_error("Error: unable to parse file \"%s\"\n", xml_file);
 		goto fail;
 	}
@@ -95,14 +97,17 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 
 	/* Create xpath evaluation context */
 	xpathCtx = xmlXPathNewContext(doc);
-	if(!xpathCtx) {
+	if(!xpathCtx)
+	{
 		g_error("Error: unable to create new XPath context\n");
 		goto fail;
 	}
 
 	/* Register namespaces from list */
-	for (ns = namespaces; ns->href; ns++) {
-		if(xmlXPathRegisterNs(xpathCtx, ns->prefix, ns->href) != 0) {
+	for (ns = namespaces; ns->href; ns++)
+	{
+		if(xmlXPathRegisterNs(xpathCtx, ns->prefix, ns->href) != 0)
+		{
 			g_error("Error: unable to register NS with prefix=\"%s\" and href=\"%s\"\n", ns->prefix, ns->href);
 			goto fail;
 		}
@@ -116,9 +121,11 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 	profile->data = g_hash_table_new_full(epl_g_int16_hash, epl_g_int16_equal, NULL, g_free);
 
 	/* Evaluate xpath expressions */
-	for (xpath = xpaths; xpath->expr; xpath++) {
+	for (xpath = xpaths; xpath->expr; xpath++)
+	{
 		xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression(xpath->expr, xpathCtx);
-		if (!xpathObj) {
+		if (!xpathObj)
+		{
 			g_error("Error: unable to evaluate xpath expression \"%s\"\n", xpath->expr);
 			xmlXPathFreeObject(xpathObj);
 			goto fail;
@@ -139,7 +146,8 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 
 	return profile;
 fail:
-	if (profile && profile->data) {
+	if (profile && profile->data)
+	{
 		g_hash_table_destroy(profile->data);
 		profile->data = NULL;
 	}
@@ -183,7 +191,8 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 	int i;
 	struct profile *profile = _profile;
 
-	for(i = 0; i < nodes->nodeNr; ++i) {
+	for(i = 0; i < nodes->nodeNr; ++i)
+	{
 		xmlAttrPtr attr;
 
 		if(!nodes->nodeTab[i] || nodes->nodeTab[i]->type != XML_ELEMENT_NODE)
@@ -192,21 +201,26 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 		cur = nodes->nodeTab[i];
 
 
-		for(attr = cur->properties; attr; attr = attr->next) {
+		for(attr = cur->properties; attr; attr = attr->next)
+		{
 			char *endptr;
 			const char *key = (char*)attr->name, *val = (char*)attr->children->content;
 
-			if (g_str_equal("dataType", key)) {
+			if (g_str_equal("dataType", key))
+			{
 				xmlNode *subnode;
 				guint16 idx = my_strtou16(val, &endptr, 16);
 				if (endptr == val) continue;
 
-				for (subnode = cur->children; subnode; subnode = subnode->next) {
-					if (subnode->type == XML_ELEMENT_NODE) {
+				for (subnode = cur->children; subnode; subnode = subnode->next)
+				{
+					if (subnode->type == XML_ELEMENT_NODE)
+					{
 						/* FIXME cast */
 						struct dataType *type;
 						const struct dataTypeMap_in *ptr = epl_type_to_hf((char*)subnode->name);
-						if (!ptr) {
+						if (!ptr)
+						{
 							g_info("Skipping unknown type '%s'\n", subnode->name);
 							continue;
 						}
@@ -231,11 +245,13 @@ parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 		const char *defaultValue = NULL, *actualValue = NULL, *value;
 		char *endptr;
 
-		for(attr = cur->properties; attr; attr = attr->next) {
+		for(attr = cur->properties; attr; attr = attr->next)
+		{
 			const char *key = (char*)attr->name,
 				  *val = (char*)attr->children->content;
 
-			if (g_str_equal("index", key)) {
+			if (g_str_equal("index", key))
+			{
 				out->idx = my_strtou16(val, &endptr, 16);
 				if (val == endptr) return FALSE;
 
@@ -251,7 +267,8 @@ parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 
 			} else if (g_str_equal("dataType", key)) {
 				guint16 id = my_strtou16(val, &endptr, 16);
-				if (endptr != val) {
+				if (endptr != val)
+				{
 					struct dataType *type = g_hash_table_lookup(profile->data, &id);
 					if (type) out->type = type->ptr;
 				}
@@ -291,7 +308,8 @@ populate_objectList(xmlNodeSetPtr nodes, void *data)
 	int i;
 	struct profile *profile = data;
 
-	for(i = 0; i < nodes->nodeNr; ++i) {
+	for(i = 0; i < nodes->nodeNr; ++i)
+	{
 		xmlNodePtr cur = nodes->nodeTab[i];
 		struct od_entry tmpobj = {0};
 
@@ -300,25 +318,30 @@ populate_objectList(xmlNodeSetPtr nodes, void *data)
 
 		parse_obj_tag(cur, &tmpobj, data);
 
-		if (tmpobj.idx) {
+		if (tmpobj.idx)
+		{
 			struct object *obj = profile_object_add(profile, tmpobj.idx);
 			obj->info = tmpobj;
 
-			if (tmpobj.kind == 8 || tmpobj.kind == 9) {
+			if (tmpobj.kind == 8 || tmpobj.kind == 9)
+			{
 				xmlNode *subcur;
 				struct subobject subobj = {0};
 
 				obj->subindices = epl_wmem_iarray_new(profile->scope, sizeof (struct subobject), subobject_equal);
 
-				for (subcur = cur->children; subcur; subcur = subcur->next) {
+				for (subcur = cur->children; subcur; subcur = subcur->next)
+				{
 					if (subcur->type != XML_ELEMENT_NODE)
 						continue;
 
-					if (parse_obj_tag(subcur, &subobj.info, profile)) {
+					if (parse_obj_tag(subcur, &subobj.info, profile))
+					{
 						epl_wmem_iarray_insert(obj->subindices,
 								subobj.info.idx, &subobj.range);
 					}
-					if (subobj.info.value && profile_object_mapping_add(profile, obj->info.idx, subobj.info.idx, subobj.info.value)) {
+					if (subobj.info.value && profile_object_mapping_add(profile, obj->info.idx, subobj.info.idx, subobj.info.value))
+					{
 						g_info("Loaded mapping from XDC %s:%s", obj->info.name, subobj.info.name);
 					}
 				}
