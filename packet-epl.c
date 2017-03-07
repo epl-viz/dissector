@@ -1938,16 +1938,23 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		if (map->info)
 			proto_item_append_text (ti, " (%s)", map->index_name);
 
-
 		ti = proto_tree_add_uint_format_value(pdo_tree, hf_epl_pdo_subindex, payload_tvb, 0, 0, map->pdo.subindex, "%02X", map->pdo.subindex);
 		PROTO_ITEM_SET_GENERATED(ti);
-		if (map->info)
+
+		if (map->info->name == map->index_name)
+			/* If name of the PDO matches that of the containing object
+			 * We are mapping an OD index not a subindex
+			 * so let's hide the subindex item, which would be
+			 * always zero anyways
+			 */
+			PROTO_ITEM_SET_HIDDEN(ti);
+		else if (map->info)
 			proto_item_append_text (ti, " (%s)", map->info->name);
 
 		if (show_pdo_meta_info)
 		{
 			ti = proto_tree_add_string_format(pdo_tree, hf_epl_asnd_identresponse_profile_path, tvb, 0, 0,
-					"", "Mapping set by %04X:%02X, Life time: Frame #%u-#%u, Offset: %04x, Length %u bits",
+					"", "Mapping set by %04X:%02X, Life time: Frame #%u-#%u, Offset: 0x%04x, Length %u bits",
 					map->param.idx, map->param.subindex, map->frame.first, map->frame.last, map->offset, map->len
 					);
 			PROTO_ITEM_SET_GENERATED(ti);
@@ -3923,7 +3930,8 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	}
 	offset += 2;
 
-	map.title = "PDO";
+	map.title = "PDO"; // FIXME: more representative name
+	// maybe Digital.Output_00h_AU8.DigitalOutput: 128 (0x80) ?
 
 	add_object_mapping(mappings, &map);
 

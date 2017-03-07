@@ -48,6 +48,7 @@ struct profile {
     wmem_array_t *RPDO; /* MN->CN */
 };
 
+#define OD_ENTRY_NO_SUBINDICES 7
 struct od_entry {
 	guint16 idx;
 	guint8 kind; /* object type, is it aggregate or plain and so, FIXME needs better name */
