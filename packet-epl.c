@@ -1765,21 +1765,43 @@ add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping)
 
 static wmem_map_t *epl_profiles;
 
-struct profile *
-profile_new(wmem_allocator_t *scope, guint16 id)
+static gboolean
+profile_del_cb(wmem_allocator_t *pool _U_, wmem_cb_event_t event _U_, void *_profile)
 {
-	struct profile *profile = wmem_new0(scope, struct profile);
+	struct profile *profile = (struct profile*)_profile;
+	wmem_map_remove(epl_profiles, &profile->id);
+	wmem_destroy_allocator(profile->scope);
+	return FALSE;
+}
+
+struct profile *
+profile_new(wmem_allocator_t *parent_pool, guint16 id)
+{
+	wmem_allocator_t *pool;
+	struct profile *profile;
+	
+	pool = wmem_allocator_new(WMEM_ALLOCATOR_SIMPLE);
+	profile = wmem_new0(pool, struct profile);
+	profile->cb_id = wmem_register_callback(parent_pool, profile_del_cb, profile);
 
 	profile->id      = id;
-	profile->scope   = scope;
-	profile->objects = wmem_map_new(scope, epl_g_int16_hash, epl_g_int16_equal);
+	profile->scope   = pool;
+	profile->parent_scope   = parent_pool;
+	profile->objects = wmem_map_new(pool, epl_g_int16_hash, epl_g_int16_equal);
 	profile->name = NULL;
 	profile->path = NULL;
-	profile->RPDO = wmem_array_new(scope, sizeof (struct object_mapping));
-	profile->TPDO = wmem_array_new(scope, sizeof (struct object_mapping));
+	profile->RPDO = wmem_array_new(pool, sizeof (struct object_mapping));
+	profile->TPDO = wmem_array_new(pool, sizeof (struct object_mapping));
 
 	wmem_map_insert(epl_profiles, &profile->id, profile);
 	return profile;
+}
+
+static void
+profile_del(struct profile *profile)
+{
+	wmem_unregister_callback(profile->parent_scope, profile->cb_id);
+	profile_del_cb(NULL, WMEM_CB_DESTROY_EVENT, profile);
 }
 
 struct object *
@@ -5377,6 +5399,8 @@ proto_register_epl(void)
 
 static uat_field_t profile_list_uats_flds[] = {
 	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "DeviceType", profile_uat_fld_devicetype_check_cb, "e.g. 401"),
+	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "VendorId", profile_uat_fld_devicetype_check_cb, "e.g. DEADBEEF"),
+	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "ProductCode", profile_uat_fld_devicetype_check_cb, "e.g. 8BADFOOD"),
 	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_check_cb, "Path to the EDS/XDD/XDC"),
 
 	UAT_END_FIELDS
@@ -5387,7 +5411,7 @@ static uat_field_t profile_list_uats_flds[] = {
 void
 proto_reg_handoff_epl(void)
 {
-	dissector_handle_t epl_udp_handle = create_dissector_handle( dissect_epludp, proto_epl );
+	dissector_handle_t epl_udp_handle = create_dissector_handle(dissect_epludp, proto_epl);
 
 	dissector_add_uint("ethertype", ETHERTYPE_EPL_V2, epl_handle);
 	dissector_add_uint("udp.port", UDP_PORT_EPL, epl_udp_handle);
@@ -5398,11 +5422,9 @@ proto_reg_handoff_epl(void)
 }
 
 static void
-reload_xdd(void *key, void *value, void *user_data _U_)
+reload_xdd(void *key _U_, void *value, void *user_data _U_)
 {
-	struct profile *old_profile = *(struct profile**)value;
-	(void)old_profile;
-	wmem_map_remove(epl_profiles, key);
+	profile_del((struct profile*)value);
 }
 
 static void
@@ -5413,7 +5435,7 @@ profile_parse_uat(void)
 	wmem_map_foreach(epl_profiles, reload_xdd, NULL);
         for (i = 0; i < nprofile_uat; i++)
         {
-            struct profile_uat_assoc *uat = &(profile_list_uats[i]);
+		struct profile_uat_assoc *uat = &(profile_list_uats[i]);
 		profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
 		if (profile)
 		{

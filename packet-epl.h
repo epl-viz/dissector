@@ -40,10 +40,11 @@ const struct dataTypeMap_in *epl_type_to_hf(const char *name);
 struct profile {
 	guint16 id;
 	wmem_map_t *objects;
-	wmem_allocator_t *scope;
+	wmem_allocator_t *scope, *parent_scope;
 	const char *name;
 	const char *path;
 	void *data;
+    guint cb_id;
     wmem_array_t *TPDO; /* CN->MN */
     wmem_array_t *RPDO; /* MN->CN */
 };
@@ -67,7 +68,7 @@ struct object {
 };
 
 
-struct profile *profile_new(wmem_allocator_t *scope, guint16 id);
+struct profile *profile_new(wmem_allocator_t *parent_pool, guint16 id);
 struct object *profile_object_add(struct profile *profile, guint16 idx);
 gboolean profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping);
 gboolean profile_object_mappings_update(struct profile *profile);

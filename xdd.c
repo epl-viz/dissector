@@ -77,7 +77,7 @@ struct xpath {
 };
 
 struct profile *
-xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
+xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 {
 	/*int ret;*/
 	struct profile *profile = NULL;
@@ -114,7 +114,7 @@ xdd_load(wmem_allocator_t *scope, guint16 id, const char *xml_file)
 	}
 
 	/* Allocate profile */
-	profile = profile_new(scope, id);
+	profile = profile_new(parent_pool, id);
 	profile->path = g_strdup(xml_file);
 
 	/* mapping type ids to &hf_s */
