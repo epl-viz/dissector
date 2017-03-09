@@ -14,7 +14,7 @@
 #include "wmem_iarray.h"
 
 static guint16
-my_strtou16(const char * str, char ** endptr, int base)
+epl_strtou16(const char * str, char ** endptr, int base)
 {
 	unsigned long val = strtoul(str, endptr, base);
 	if (val > G_MAXUINT16)
@@ -79,7 +79,6 @@ struct xpath {
 struct profile *
 xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 {
-	/*int ret;*/
 	struct profile *profile = NULL;
 	xmlXPathContextPtr xpathCtx = NULL;
 	xmlDoc *doc = NULL;
@@ -90,7 +89,7 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 	doc = xmlParseFile(xml_file);
 	if (!doc)
 	{
-		g_error("Error: unable to parse file \"%s\"\n", xml_file);
+		g_warning("Error: unable to parse file \"%s\"\n", xml_file);
 		goto fail;
 	}
 
@@ -99,7 +98,7 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 	xpathCtx = xmlXPathNewContext(doc);
 	if(!xpathCtx)
 	{
-		g_error("Error: unable to create new XPath context\n");
+		g_warning("Error: unable to create new XPath context\n");
 		goto fail;
 	}
 
@@ -108,14 +107,14 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 	{
 		if(xmlXPathRegisterNs(xpathCtx, ns->prefix, ns->href) != 0)
 		{
-			g_error("Error: unable to register NS with prefix=\"%s\" and href=\"%s\"\n", ns->prefix, ns->href);
+			g_warning("Error: unable to register NS with prefix=\"%s\" and href=\"%s\"\n", ns->prefix, ns->href);
 			goto fail;
 		}
 	}
 
 	/* Allocate profile */
 	profile = profile_new(parent_pool, id);
-	profile->path = g_strdup(xml_file);
+	profile->path = wmem_strdup(profile->scope, xml_file);
 
 	/* mapping type ids to &hf_s */
 	profile->data = g_hash_table_new_full(epl_g_int16_hash, epl_g_int16_equal, NULL, g_free);
@@ -124,9 +123,9 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 	for (xpath = xpaths; xpath->expr; xpath++)
 	{
 		xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression(xpath->expr, xpathCtx);
-		if (!xpathObj)
+		if (!xpathObj || !xpathObj->nodesetval)
 		{
-			g_error("Error: unable to evaluate xpath expression \"%s\"\n", xpath->expr);
+			g_warning("Error: unable to evaluate xpath expression \"%s\"\n", xpath->expr);
 			xmlXPathFreeObject(xpathObj);
 			goto fail;
 		}
@@ -144,13 +143,17 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 	 */
 	profile_object_mappings_update(profile);
 
+	xmlXPathFreeContext(xpathCtx);
+	xmlFreeDoc(doc);
 	return profile;
+
 fail:
 	if (profile && profile->data)
 	{
 		g_hash_table_destroy(profile->data);
-		profile->data = NULL;
+		profile_del(profile);
 	}
+
 	if (xpathCtx)
 		xmlXPathFreeContext(xpathCtx);
 	if (doc)
@@ -172,7 +175,7 @@ populate_profileName(xmlNodeSetPtr nodes, void *_profile)
 	&&  nodes->nodeTab[0]->type == XML_ELEMENT_NODE
 	&&  nodes->nodeTab[0]->children)
 	{
-		profile->name = (char*)xmlStrdup(nodes->nodeTab[0]->children->content);
+		profile->name = wmem_strdup(profile->scope, (char*)nodes->nodeTab[0]->children->content);
 		return 0;
 	}
 
@@ -209,7 +212,7 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 			if (g_str_equal("dataType", key))
 			{
 				xmlNode *subnode;
-				guint16 idx = my_strtou16(val, &endptr, 16);
+				guint16 idx = epl_strtou16(val, &endptr, 16);
 				if (endptr == val) continue;
 
 				for (subnode = cur->children; subnode; subnode = subnode->next)
@@ -252,21 +255,21 @@ parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 
 			if (g_str_equal("index", key))
 			{
-				out->idx = my_strtou16(val, &endptr, 16);
+				out->idx = epl_strtou16(val, &endptr, 16);
 				if (val == endptr) return FALSE;
 
 			} else if (g_str_equal("subIndex", key)) {
-				out->idx = my_strtou16(val, &endptr, 16);
+				out->idx = epl_strtou16(val, &endptr, 16);
 				if (val == endptr) return FALSE;
 
 			} else if (g_str_equal("name", key)) {
 				g_strlcpy(out->name, val, sizeof out->name);
 
 			} else if (g_str_equal("objectType", key)) {
-				out->kind = my_strtou16(val, &endptr, 16);
+				out->kind = epl_strtou16(val, &endptr, 16);
 
 			} else if (g_str_equal("dataType", key)) {
-				guint16 id = my_strtou16(val, &endptr, 16);
+				guint16 id = epl_strtou16(val, &endptr, 16);
 				if (endptr != val)
 				{
 					struct dataType *type = g_hash_table_lookup(profile->data, &id);
