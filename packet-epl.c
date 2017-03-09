@@ -1706,8 +1706,8 @@ struct object_mapping {
 	} pdo,   /* The PDO to be mapped */
 	  param; /* The ObjectMapping OD entry that mapped it */
 	/* in bits */
-	int offset;
-	int len;
+	guint16 offset;
+	guint16 len;
 	/* info */
 	struct {
 		guint32 first, last;
@@ -1977,14 +1977,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		ti = proto_tree_add_uint_format_value(pdo_tree, hf_epl_pdo_subindex, payload_tvb, 0, 0, map->pdo.subindex, "%02X", map->pdo.subindex);
 		PROTO_ITEM_SET_GENERATED(ti);
 
-		if (map->info->name == map->index_name)
-			/* If name of the PDO matches that of the containing object
-			 * We are mapping an OD index not a subindex
-			 * so let's hide the subindex item, which would be
-			 * always zero anyways
-			 */
-			PROTO_ITEM_SET_HIDDEN(ti);
-		else if (map->info)
+		if (map->info && map->info->name != map->index_name)
 			proto_item_append_text (ti, " (%s)", map->info->name);
 
 		if (show_pdo_meta_info)
@@ -5475,7 +5468,7 @@ profile_parse_uat(void)
 		if (g_str_has_suffix(uat->path, ".eds"))
 			profile = eds_load(wmem_epan_scope(), uat->DeviceType, uat->path);
 #ifdef HAVE_LIBXML
-		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".eds"))
+		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".xdc"))
 			profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
 #endif /* HAVE_LIBXML */
 
@@ -5498,7 +5491,7 @@ profile_uat_update_record(void *_record, char **err)
 	if (g_str_has_suffix(record->path, ".eds"))
 		return TRUE;
 	
-	if (g_str_has_suffix(record->path, ".xdc") || g_str_has_suffix(record->path, ".xdd"))
+	if (g_str_has_suffix(record->path, ".xdd") || g_str_has_suffix(record->path, ".xdc"))
 	{
 #ifdef HAVE_LIBXML
 		return TRUE;

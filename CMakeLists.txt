@@ -26,7 +26,7 @@ set_module_info(epl_plus_xdd 0 0 3 0)
 
 ## XXX Remove when libxml2 is added as optional dependency to Wireshark ##
 set(HAVE_LIBXML 1)
-add_definitions(-DHAVE_LIBXML2=1)
+add_definitions(-DHAVE_LIBXML=1)
 ##########################################################################
 
 
