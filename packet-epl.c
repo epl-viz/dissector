@@ -34,7 +34,7 @@
  *                     - Ahmad Fatoum <ahmad@a3f.at>
  *                       - Converted into plugin for easier development
  *                       - ObjectMappings now used for dissecting PDOs
- *                       - XDD files can be read for name/type information
+ *                       - XDD/EDS files can be read for name/type information
  * A dissector for:
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
@@ -58,7 +58,12 @@
 #include "config.h"
 
 #include "packet-epl.h"
+#ifdef HAVE_LIBXML
 #include "xdd.h"
+#define IF_LIBXML(x) x
+#else /* HAVE_LIBXML */
+#define IF_LIBXML(x)
+#endif /* HAVE_LIBXML */
 #include "eds.h"
 #include "wmem_iarray.h"
 
@@ -2229,7 +2234,10 @@ setup_dissector(void)
 static void
 cleanup_dissector(void)
 {
+
+#ifdef HAVE_LIBXML
 	xdd_free();
+#endif /*  HAVE_LIBXML */
 	eds_free();
 	reassembly_table_destroy(&epl_reassembly_table);
 	/*g_hash_free(epl_duplication_table);*/
@@ -5385,12 +5393,17 @@ proto_register_epl(void)
 	prefs_register_bool_preference(epl_module, "show_pdo_meta_info", "Show life times and origin PDO Tx/Rx params for PDO entries",
 		"For analysis purposes one might want to see how long the current mapping has been active for and what OD write caused it", &show_pdo_meta_info);
 
+#ifdef HAVE_LIBXML
 	prefs_register_bool_preference(epl_module, "read_xdc_for_mappings", "Read ObjectMappings from XDC",
 		"If you want to parse the defaultValue (XDD) and actualValue (XDC) attributes for ObjectMappings in order to detect default PDO mappings, which may not be exchanged over SDO ", &read_xdc_for_mappings);
+#endif /* HAVE_LIBXML */
 
 	epl_profiles = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
 
+#ifdef HAVE_LIBXML
 	xdd_init();
+#endif /* HAVE_LIBXML */
+
 	eds_init();
 
 	profile_uat = uat_new("EPL Device Profiles",
@@ -5409,7 +5422,7 @@ proto_register_epl(void)
 
 	prefs_register_uat_preference(epl_module, "profile_list",
 			"EPL Device profiles",
-			"Add vendor-provided XDD profiles here",
+			"Add vendor-provided EDS" IF_LIBXML("/XDD") " profiles here",
 			profile_uat
 			);
 
@@ -5423,7 +5436,7 @@ static uat_field_t profile_list_uats_flds[] = {
 	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "DeviceType", profile_uat_fld_devicetype_check_cb, "e.g. 401"),
 	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "VendorId", profile_uat_fld_devicetype_check_cb, "e.g. DEADBEEF"),*/
 	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "ProductCode", profile_uat_fld_devicetype_check_cb, "e.g. 8BADFOOD"),*/
-	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_check_cb, "Path to the EDS/XDD/XDC"),
+	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_check_cb, "Path to the EDS" IF_LIBXML("/XDD/XDC")),
 
 	UAT_END_FIELDS
 };
@@ -5461,8 +5474,10 @@ profile_parse_uat(void)
 
 		if (g_str_has_suffix(uat->path, ".eds"))
 			profile = eds_load(wmem_epan_scope(), uat->DeviceType, uat->path);
+#ifdef HAVE_LIBXML
 		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".eds"))
 			profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
+#endif /* HAVE_LIBXML */
 
 		if (profile)
 			g_info("Loading %s\n", profile->path);
@@ -5472,16 +5487,29 @@ profile_parse_uat(void)
 static gboolean
 profile_uat_update_record(void *_record, char **err)
 {
+#ifdef HAVE_LIBXML
+	const char *supported = "Only *.xdd, *.xdc and *.eds formats are supported.";
+#else /* HAVE_LIBXML */
+	const char *supported = "Only *.eds format is supported.";
+#endif /* HAVE_LIBXML */
+
 	struct profile_uat_assoc *record = (struct profile_uat_assoc *)_record;
 
-	if (!g_str_has_suffix(record->path, ".xdd")
-	&&  !g_str_has_suffix(record->path, ".eds")
-	&&  !g_str_has_suffix(record->path, ".xdc"))
+	if (g_str_has_suffix(record->path, ".eds"))
+		return TRUE;
+	
+	if (g_str_has_suffix(record->path, ".xdc") || g_str_has_suffix(record->path, ".xdd"))
 	{
-		*err = g_strdup_printf("Only *.xdd, *.xdc and *.eds formats are supported.");
+#ifdef HAVE_LIBXML
+		return TRUE;
+#else /* HAVE_LIBXML */
+		*err = g_strdup_printf("*.xdd and *.xdc support not compiled in. %s", supported);
 		return FALSE;
+#endif /* HAVE_LIBXML */
 	}
-	return TRUE;
+
+	*err = g_strdup(supported);
+	return FALSE;
 }
 
 static void
