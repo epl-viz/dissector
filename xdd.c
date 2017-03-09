@@ -297,14 +297,6 @@ parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 		return TRUE;
 }
 
-gboolean subobject_equal(gconstpointer _a, gconstpointer _b) {
-	const struct od_entry *a = &((struct subobject*)_a)->info,
-						  *b = &((struct subobject*)_b)->info;
-	return a->kind == b->kind
-		&& a->type == b->type
-		&& g_str_equal(a->name, b->name);
-}
-
 static int
 populate_objectList(xmlNodeSetPtr nodes, void *data)
 {

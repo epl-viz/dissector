@@ -41,8 +41,8 @@ struct profile {
 	guint16 id;
 	wmem_map_t *objects;
 	wmem_allocator_t *scope, *parent_scope;
-	const char *name;
-	const char *path;
+	char *name;
+	char *path;
 	void *data;
     guint cb_id;
     wmem_array_t *TPDO; /* CN->MN */
@@ -62,6 +62,7 @@ struct subobject {
 	range_admin_t range;
 	struct od_entry info;
 };
+gboolean subobject_equal(gconstpointer, gconstpointer);
 struct object {
 	struct od_entry info;
 	epl_wmem_iarray_t *subindices;
@@ -69,9 +70,12 @@ struct object {
 
 
 struct profile *profile_new(wmem_allocator_t *parent_pool, guint16 id);
+void profile_del(struct profile *profile);
 struct object *profile_object_add(struct profile *profile, guint16 idx);
+struct object *profile_object_lookup_or_add(struct profile *profile, guint16 idx);
 gboolean profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping);
 gboolean profile_object_mappings_update(struct profile *profile);
+struct object * object_lookup(struct profile *profile, guint16 idx);
 
 #define CHECK_OVERLAP(x, x_len, y, y_len) ((x) <= (y) + ((y_len)-1) && (y) <= (x) + ((x_len)-1))
 

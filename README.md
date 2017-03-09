@@ -1,6 +1,6 @@
 ## EPL-Dissector with XDD support plugin for Wireshark
 
-Parses XDD files and uses extracted information to correctly label SDOs and PDOs. Depends on libxml2.
+Parses XDD/EDS files and uses extracted information to correctly label SDOs and PDOs. Depends on libxml2. Tested working with Wireshark v2.2.4.
 
 #### Don't clone this
 

@@ -59,6 +59,7 @@
 
 #include "packet-epl.h"
 #include "xdd.h"
+#include "eds.h"
 #include "wmem_iarray.h"
 
 #include <epan/conversation.h>
@@ -83,6 +84,7 @@ struct profile_uat_assoc {
 
 static void *profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
 static void profile_uat_free_cb(void *r);
+static gboolean profile_uat_update_record(void *r, char **err);
 static void profile_parse_uat(void);
 static gboolean profile_uat_fld_fileopen_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
 static gboolean profile_uat_fld_devicetype_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
@@ -1797,7 +1799,7 @@ profile_new(wmem_allocator_t *parent_pool, guint16 id)
 	return profile;
 }
 
-static void
+void
 profile_del(struct profile *profile)
 {
 	wmem_unregister_callback(profile->parent_scope, profile->cb_id);
@@ -1814,6 +1816,14 @@ profile_object_add(struct profile *profile, guint16 idx)
 	wmem_map_insert(profile->objects, &object->info.idx, object);
 	return object;
 }
+
+struct object *
+profile_object_lookup_or_add(struct profile *profile, guint16 idx)
+{
+	struct object *obj = object_lookup(profile, idx);
+	return obj ? obj : profile_object_add(profile, idx);
+}
+
 
 gboolean
 profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping)
@@ -1839,8 +1849,7 @@ profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex
 	return dissect_object_mapping(profile, mappings, NULL, tvb, 0, 0, idx, subindex) == sizeof mapping;
 }
 
-static struct object *object_lookup(struct profile *profile, guint16 idx);
-static struct subobject *subobject_lookup(struct object *obj, guint8 subindex);
+static struct subobject * subobject_lookup(struct object *obj, guint8 subindex);
 
 gboolean
 profile_object_mappings_update(struct profile *profile)
@@ -2052,12 +2061,23 @@ epl_update_convo_cn_profile(struct epl_convo *convo, guint16 profile_id)
 	return FALSE;
 }
 
-static struct object *
+struct object *
 object_lookup(struct profile *profile, guint16 idx)
 {
 	if (profile == NULL)
 		return NULL;
 	return wmem_map_lookup(profile->objects, &idx);
+}
+
+gboolean
+subobject_equal(gconstpointer _a, gconstpointer _b)
+{
+    const struct od_entry *a = &((struct subobject*)_a)->info;
+    const struct od_entry *b = &((struct subobject*)_b)->info;
+
+    return a->kind == b->kind
+	    && a->type == b->type
+	    && g_str_equal(a->name, b->name);
 }
 static struct subobject *
 subobject_lookup(struct object *obj, guint8 subindex)
@@ -2210,6 +2230,7 @@ static void
 cleanup_dissector(void)
 {
 	xdd_free();
+	eds_free();
 	reassembly_table_destroy(&epl_reassembly_table);
 	/*g_hash_free(epl_duplication_table);*/
 	count = 0;
@@ -5370,6 +5391,7 @@ proto_register_epl(void)
 	epl_profiles = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
 
 	xdd_init();
+	eds_init();
 
 	profile_uat = uat_new("EPL Device Profiles",
 			sizeof (struct profile_uat_assoc),
@@ -5380,7 +5402,7 @@ proto_register_epl(void)
 			UAT_AFFECTS_DISSECTION,         /* affects dissection of packets, but not set of named fields */
 			NULL,                           /* Help section (currently a wiki page) */
 			profile_uat_copy_cb,
-			NULL,
+			profile_uat_update_record,
 			profile_uat_free_cb,
 			profile_parse_uat,
 			profile_list_uats_flds);
@@ -5399,8 +5421,8 @@ proto_register_epl(void)
 
 static uat_field_t profile_list_uats_flds[] = {
 	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "DeviceType", profile_uat_fld_devicetype_check_cb, "e.g. 401"),
-	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "VendorId", profile_uat_fld_devicetype_check_cb, "e.g. DEADBEEF"),
-	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "ProductCode", profile_uat_fld_devicetype_check_cb, "e.g. 8BADFOOD"),
+	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "VendorId", profile_uat_fld_devicetype_check_cb, "e.g. DEADBEEF"),*/
+	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "ProductCode", profile_uat_fld_devicetype_check_cb, "e.g. 8BADFOOD"),*/
 	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_check_cb, "Path to the EDS/XDD/XDC"),
 
 	UAT_END_FIELDS
@@ -5422,7 +5444,7 @@ proto_reg_handoff_epl(void)
 }
 
 static void
-reload_xdd(void *key _U_, void *value, void *user_data _U_)
+reload_profiles(void *key _U_, void *value, void *user_data _U_)
 {
 	profile_del((struct profile*)value);
 }
@@ -5431,18 +5453,35 @@ static void
 profile_parse_uat(void)
 {
 	guint i;
-	struct profile *profile;
-	wmem_map_foreach(epl_profiles, reload_xdd, NULL);
+	struct profile *profile = NULL;
+	wmem_map_foreach(epl_profiles, reload_profiles, NULL);
         for (i = 0; i < nprofile_uat; i++)
         {
 		struct profile_uat_assoc *uat = &(profile_list_uats[i]);
-		profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
+
+		if (g_str_has_suffix(uat->path, ".eds"))
+			profile = eds_load(wmem_epan_scope(), uat->DeviceType, uat->path);
+		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".eds"))
+			profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
+
 		if (profile)
-		{
 			g_info("Loading %s\n", profile->path);
-			wmem_map_insert(epl_profiles, &profile->id, profile);
-		}
 	}
+}
+
+static gboolean
+profile_uat_update_record(void *_record, char **err)
+{
+	struct profile_uat_assoc *record = (struct profile_uat_assoc *)_record;
+
+	if (!g_str_has_suffix(record->path, ".xdd")
+	&&  !g_str_has_suffix(record->path, ".eds")
+	&&  !g_str_has_suffix(record->path, ".xdc"))
+	{
+		*err = g_strdup_printf("Only *.xdd, *.xdc and *.eds formats are supported.");
+		return FALSE;
+	}
+	return TRUE;
 }
 
 static void
@@ -5451,6 +5490,7 @@ profile_uat_free_cb(void *r)
 	struct profile_uat_assoc *h = (struct profile_uat_assoc *)r;
 
 	g_free(h->path);
+	g_free(h->DeviceTypeString);
 }
 
 static void*
@@ -5492,6 +5532,7 @@ profile_uat_fld_fileopen_check_cb(void *record _U_, const char *path, guint len,
 		*err = g_strdup("No filename given.");
 		return FALSE;
 	}
+
 	if (ws_stat64(path, &st) != 0)
 	{
 		*err = g_strdup_printf("File '%s' does not exist or access was denied.", path);

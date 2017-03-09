@@ -27,6 +27,7 @@ set_module_info(epl_plus_xdd 0 0 3 0)
 set(DISSECTOR_SRC
 	packet-epl.c
 	xdd.c
+	eds.c
 	wmem_iarray.c
 )
 
