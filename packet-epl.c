@@ -5470,11 +5470,15 @@ profile_uat_update_record(void *_record, char **err)
 	struct profile_uat_assoc *record = (struct profile_uat_assoc *)_record;
 
 	if (g_str_has_suffix(record->path, ".eds"))
+	{
+		*err = NULL;
 		return TRUE;
+	}
 	
 	if (g_str_has_suffix(record->path, ".xdd") || g_str_has_suffix(record->path, ".xdc"))
 	{
 #ifdef HAVE_LIBXML
+		*err = NULL;
 		return TRUE;
 #else /* !HAVE_LIBXML */
 		*err = g_strdup_printf("*.xdd and *.xdc support not compiled in. %s", supported);
