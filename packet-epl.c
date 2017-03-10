@@ -3914,24 +3914,15 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	map.frame.first = framenum;
 	map.frame.last   = G_MAXUINT32;
 
-	if (epl_tree)
-	{
-		psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_mapping, tvb, offset, 1, ENC_NA);
-		psf_tree = proto_item_add_subtree(psf_item, ett_epl_asnd_sdo_cmd_data_mapping);
-	}
+	psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_mapping, tvb, offset, 1, ENC_NA);
+	psf_tree = proto_item_add_subtree(psf_item, ett_epl_asnd_sdo_cmd_data_mapping);
 
 	map.pdo.idx = tvb_get_letohs(tvb, offset);
-	if (epl_tree)
-	{
-		ti_obj = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, offset, 2, map.pdo.idx,"Index: 0x%04X", map.pdo.idx);
-	}
+	ti_obj = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, offset, 2, map.pdo.idx,"Index: 0x%04X", map.pdo.idx);
 	offset += 2;
 
 	map.pdo.subindex = tvb_get_guint8(tvb, offset);
-	if (epl_tree)
-	{
-		ti_subobj = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, offset, 1, map.pdo.subindex, "SubIndex: 0x%02X", map.pdo.subindex);
-	}
+	ti_subobj = proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, offset, 1, map.pdo.subindex, "SubIndex: 0x%02X", map.pdo.subindex);
 	offset += 2;
 
 	/* look up index in registered profiles */
@@ -3943,35 +3934,25 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 		{
 			map.info = &mapping_obj->info;
 			map.index_name = map.info->name;
-			if (epl_tree)
-			{
-				proto_item_append_text (ti_obj, " (%s)", map.info->name);
-			}
+			proto_item_append_text (ti_obj, " (%s)", map.info->name);
 
 			mapping_subobj = subobject_lookup(mapping_obj, map.pdo.subindex);
 			if (mapping_subobj)
 			{
 				map.info = &mapping_subobj->info;
-				if (epl_tree)
-				{
-					proto_item_append_text (ti_subobj, " (%s)", map.info->name);
-				}
+				proto_item_append_text (ti_subobj, " (%s)", map.info->name);
 			}
 		}
 	}
 
 
 	map.offset = tvb_get_letohs(tvb, offset);
-	if (epl_tree)
-		proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_offset, tvb, offset, 2, map.offset,"Offset: 0x%04X", map.offset);
+	proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_offset, tvb, offset, 2, map.offset,"Offset: 0x%04X", map.offset);
 	offset += 2;
 
 	map.len = tvb_get_guint8(tvb, offset);
-	if (epl_tree)
-	{
-		psf_item = proto_tree_add_item(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_length, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-		proto_item_append_text(psf_item, " bits");
-	}
+	psf_item = proto_tree_add_item(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_length, tvb, offset, 2, ENC_LITTLE_ENDIAN);
+	proto_item_append_text(psf_item, " bits");
 	offset += 2;
 
 	map.title = "PDO"; /* FIXME: more representative name */
