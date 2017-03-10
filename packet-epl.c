@@ -3968,7 +3968,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 {
 	gint dataoffset;
 	guint8 subindex = 0x00,  padding = 0x00;
-	guint16 index = 0x00, sod_index = 0x00, nosub = 0x00 ,error = 0xFF, entries = 0x00, sub_val = 0x00;
+	guint16 idx = 0x00, sod_index = 0x00, nosub = 0x00 ,error = 0xFF, entries = 0x00, sub_val = 0x00;
 	guint32 size, offsetincrement, datalength, remlength, objectcnt;
 	gboolean lastentry = FALSE;
 	const gchar *index_str, *sub_str, *sub_index_str;
@@ -4051,15 +4051,15 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 			if (segmented <= EPL_ASND_SDO_CMD_SEGMENTATION_INITIATE_TRANSFER)
 			{
 				/* get SDO index value */
-				index = tvb_get_letohs(tvb, dataoffset);
+				idx = tvb_get_letohs(tvb, dataoffset);
 				/* add index item */
 				psf_item = proto_tree_add_item(psf_od_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, offset+4, 2, ENC_LITTLE_ENDIAN);
 				/* value to string */
-				index_str = rval_to_str_const(index, sod_cmd_str, "unknown");
+				index_str = rval_to_str_const(idx, sod_cmd_str, "unknown");
 				/* get index string value */
 				sod_index = str_to_val(index_str, sod_cmd_str_val, error);
 				/* get subindex string */
-				sub_index_str = val_to_str_ext_const(index, &sod_cmd_no_sub, "unknown");
+				sub_index_str = val_to_str_ext_const(idx, &sod_cmd_no_sub, "unknown");
 				/* get subindex string value*/
 				nosub = str_to_val(sub_index_str, sod_cmd_str_no_sub,error);
 
@@ -4067,7 +4067,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 				{
 					/* add index string */
 					proto_item_append_text(psf_item," (%s", val_to_str_ext_const(((guint32)(sod_index<<16)), &sod_index_names, "User Defined"));
-					proto_item_append_text(psf_item,"_%02Xh", (index-sod_index));
+					proto_item_append_text(psf_item,"_%02Xh", (idx-sod_index));
 					if(sod_index == EPL_SOD_PDO_RX_MAPP || sod_index == EPL_SOD_PDO_TX_MAPP)
 					{
 						proto_item_append_text(psf_item,"_AU64)");
@@ -4079,52 +4079,52 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 				}
 				else
 				{
-					proto_item_append_text(psf_item," (%s)", val_to_str_ext_const(((guint32)(index<<16)), &sod_index_names, "User Defined"));
+					proto_item_append_text(psf_item," (%s)", val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined"));
 				}
 
 				if (objectcnt < 8)
-					col_append_fstr(pinfo->cinfo, COL_INFO, " (0x%04X", index);
+					col_append_fstr(pinfo->cinfo, COL_INFO, " (0x%04X", idx);
 				else
 					col_append_str(pinfo->cinfo, COL_INFO, ".");
 
 				if (sod_index != error)
-					index = sod_index;
+					idx = sod_index;
 
 				dataoffset += 2;
 
-				proto_item_append_text(psf_od_tree, " Idx: 0x%04X", index);
+				proto_item_append_text(psf_od_tree, " Idx: 0x%04X", idx);
 
 				/* get subindex offset */
 				subindex = tvb_get_guint8(tvb, dataoffset);
 				proto_item_append_text(psf_od_tree, " SubIdx: 0x%02X", subindex);
 				/* get subindex string */
-				sub_str = val_to_str_ext_const(index, &sod_cmd_sub_str, "unknown");
+				sub_str = val_to_str_ext_const(idx, &sod_cmd_sub_str, "unknown");
 				/* get string value */
 				sub_val = str_to_val(sub_str, sod_cmd_sub_str_val,error);
 
 				if(sub_val != error)
-					index = sub_val;
+					idx = sub_val;
 
 				/* if the subindex is a EPL_SOD_STORE_PARAM */
-				if(index == EPL_SOD_STORE_PARAM && subindex <= 0x7F && subindex >= 0x04)
+				if(idx == EPL_SOD_STORE_PARAM && subindex <= 0x7F && subindex >= 0x04)
 				{
 					psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, dataoffset, 1, ENC_LITTLE_ENDIAN);
 					proto_item_append_text(psf_item, " (ManufacturerParam_%02Xh_U32)", subindex);
 				}
 				/* if the subindex is a EPL_SOD_RESTORE_PARAM */
-				else if(index == EPL_SOD_RESTORE_PARAM && subindex <= 0x7F && subindex >= 0x04)
+				else if(idx == EPL_SOD_RESTORE_PARAM && subindex <= 0x7F && subindex >= 0x04)
 				{
 					psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, dataoffset, 1, ENC_LITTLE_ENDIAN);
 					proto_item_append_text(psf_item, " (ManufacturerParam_%02Xh_U32)", subindex);
 				}
 				/* if the subindex is a EPL_SOD_PDO_RX_MAPP */
-				else if(index == EPL_SOD_PDO_RX_MAPP && subindex >= 0x01 && subindex <= 0xfe)
+				else if(idx == EPL_SOD_PDO_RX_MAPP && subindex >= 0x01 && subindex <= 0xfe)
 				{
 					psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, dataoffset, 1, ENC_LITTLE_ENDIAN);
 					proto_item_append_text(psf_item, " (ObjectMapping)");
 				}
 				/* if the subindex is a EPL_SOD_PDO_TX_MAPP */
-				else if(index == EPL_SOD_PDO_TX_MAPP && subindex >= 0x01 && subindex <= 0xfe)
+				else if(idx == EPL_SOD_PDO_TX_MAPP && subindex >= 0x01 && subindex <= 0xfe)
 				{
 					psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, dataoffset, 1, ENC_LITTLE_ENDIAN);
 					proto_item_append_text(psf_item, " (ObjectMapping)");
@@ -4139,7 +4139,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 				else
 				{
 					psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, dataoffset, 1, ENC_LITTLE_ENDIAN);
-					proto_item_append_text(psf_item, " (%s)", val_to_str_ext_const((subindex | (index << 16)), &sod_index_names, "User Defined"));
+					proto_item_append_text(psf_item, " (%s)", val_to_str_ext_const((subindex | (idx << 16)), &sod_index_names, "User Defined"));
 				}
 
 				/* info text */
@@ -4164,18 +4164,18 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 			PROTO_ITEM_SET_GENERATED(psf_item);
 
 			/* if the frame is a PDO Mapping and the subindex is bigger than 0x00 */
-			if((index == EPL_SOD_PDO_TX_MAPP && subindex > entries) ||(index == EPL_SOD_PDO_RX_MAPP && subindex > entries))
+			if((idx == EPL_SOD_PDO_TX_MAPP && subindex > entries) ||(idx == EPL_SOD_PDO_RX_MAPP && subindex > entries))
 			{
 				psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_mapping, tvb, dataoffset, 1, ENC_NA);
 				psf_tree = proto_item_add_subtree(psf_item, ett_epl_asnd_sdo_cmd_data_mapping);
-				index = tvb_get_letohs(tvb, dataoffset);
-				proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, dataoffset, 2, index,"Index: 0x%04X", index);
+				idx = tvb_get_letohs(tvb, dataoffset);
+				proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_index, tvb, dataoffset, 2, idx,"Index: 0x%04X", idx);
 				dataoffset += 2;
-				index = tvb_get_guint8(tvb, dataoffset);
-				proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, dataoffset, 1, index,"SubIndex: 0x%02X", index);
-				dataoffset += 2; // FIXME: is 2 correct?
-				index = tvb_get_letohs(tvb, dataoffset);
-				proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_offset, tvb, dataoffset, 2, index,"Offset: 0x%04X", index);
+				idx = tvb_get_guint8(tvb, dataoffset);
+				proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_subindex, tvb, dataoffset, 1, idx,"SubIndex: 0x%02X", idx);
+				dataoffset += 2; /* FIXME: is 2 correct? */
+				idx = tvb_get_letohs(tvb, dataoffset);
+				proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_offset, tvb, dataoffset, 2, idx,"Offset: 0x%04X", idx);
 				dataoffset += 2;
 				proto_tree_add_item(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_length, tvb, dataoffset, 2, ENC_LITTLE_ENDIAN);
 				/*dataoffset += 2;*/
@@ -4206,7 +4206,7 @@ gint
 dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
 	gint size, payload_length;
-	guint16 index = 0x00;
+	guint16 idx = 0x00;
 	guint8 subindex = 0x00;
 	guint32 fragmentId, frame;
 	proto_item *psf_item, *cmd_payload;
@@ -4219,22 +4219,22 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 
 	if (!response)
 	{   /* request */
-		index = tvb_get_letohs(tvb, offset);
+		idx = tvb_get_letohs(tvb, offset);
 		psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-		proto_item_append_text(psf_item," (%s)", val_to_str_ext_const(((guint32)(index<<16)), &sod_index_names, "User Defined" ));
+		proto_item_append_text(psf_item," (%s)", val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined" ));
 		offset += 2;
 
 		subindex = tvb_get_guint8(tvb, offset);
 		psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, offset, 1, ENC_LITTLE_ENDIAN);
-		proto_item_append_text(psf_item, " (%s)", val_to_str_ext_const((subindex|(index<<16)), &sod_index_names, "User Defined"));
+		proto_item_append_text(psf_item, " (%s)", val_to_str_ext_const((subindex|(idx<<16)), &sod_index_names, "User Defined"));
 
 		offset += 1;
 
 		col_append_fstr(pinfo->cinfo, COL_INFO, "%s[%d]: (0x%04X/%d)",
 						 val_to_str_ext(EPL_ASND_SDO_COMMAND_READ_BY_INDEX, &epl_sdo_asnd_commands_short_ext, "Command(%02X)"),
-						 segment_size, index, subindex);
-		col_append_fstr(pinfo->cinfo, COL_INFO, " (%s", val_to_str_ext_const(((guint32) (index << 16)), &sod_index_names, "User Defined"));
-		col_append_fstr(pinfo->cinfo, COL_INFO, "/%s)",val_to_str_ext_const((subindex|(index<<16)), &sod_index_names, "User Defined"));
+						 segment_size, idx, subindex);
+		col_append_fstr(pinfo->cinfo, COL_INFO, " (%s", val_to_str_ext_const(((guint32) (idx << 16)), &sod_index_names, "User Defined"));
+		col_append_fstr(pinfo->cinfo, COL_INFO, "/%s)",val_to_str_ext_const((subindex|(idx<<16)), &sod_index_names, "User Defined"));
 	}
 	else
 	{
@@ -5403,7 +5403,7 @@ proto_register_epl(void)
 	/* tap-registration */
 	/*  epl_tap = register_tap("epl-xdd");*/
 
-	g_info("Loading EPL+XDD plugin (built on " __DATE__ " " __TIME__ ")");
+	puts("Loading EPL+XDD plugin (built on " __DATE__ " " __TIME__ ")");
 }
 
 static uat_field_t profile_list_uats_flds[] = {

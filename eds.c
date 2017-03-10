@@ -33,7 +33,6 @@
 #include <glib.h>
 #include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
 
 #include <epan/wmem/wmem.h>
 #include <errno.h>
@@ -46,10 +45,10 @@ epl_ishex(const char *num)
 	if (g_str_has_prefix(num, "0x"))
 		return TRUE;
 
-	for (; isxdigit(*num); num++)
+	for (; g_ascii_isxdigit(*num); num++)
 		;
 
-	if (tolower(*num) == 'h')
+	if (g_ascii_tolower(*num) == 'h')
 		return TRUE;
 
 	return FALSE;
@@ -195,7 +194,7 @@ eds_load(wmem_allocator_t *parent_pool, guint16 id, const char *eds_file)
 		struct od_entry tmpobj = {0};
 		gboolean is_object = TRUE;
 		
-		if (!isxdigit(**group))
+		if (!g_ascii_isxdigit(**group))
 			continue;
 
 		idx = epl_strtou16(*group, &endptr, 16);
