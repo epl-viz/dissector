@@ -61,9 +61,9 @@
 #ifdef HAVE_LIBXML
 #include "xdd.h"
 #define IF_LIBXML(x) x
-#else /* HAVE_LIBXML */
+#else /* !HAVE_LIBXML */
 #define IF_LIBXML(x)
-#endif /* HAVE_LIBXML */
+#endif /* !HAVE_LIBXML */
 #include "eds.h"
 #include "wmem_iarray.h"
 
@@ -1909,7 +1909,7 @@ find_or_create_conversation_epl(packet_info *pinfo, guint8 cn_addr)
 	if ((convo = find_conversation(pinfo->num, &convo_mac, &convo_mac, PT_I2C,
 					cn_addr, cn_addr, NO_ADDR_B|NO_PORT_B)))
 	{
-		//TODO: use conversation template?
+		/* TODO: use conversation template? */
 
 		if (pinfo->num > convo->last_frame)
 			convo->last_frame = pinfo->num;
@@ -1939,7 +1939,7 @@ struct epl_convo {
 static int
 call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint offset, guint len, guint8 msgType)
 {
-	// FIXME: non 8-bit-multiple-data!!!
+	/* TODO: What about non 8-bit-multiple-data */
 	wmem_array_t *mapping = msgType == EPL_PRES ? convo->TPDO : convo->RPDO;
 	tvbuff_t *payload_tvb;
 	guint rem_len;
@@ -2039,7 +2039,7 @@ epl_update_convo_cn_profile(struct epl_convo *convo, guint16 profile_id)
 	if ((profile = (struct profile*)wmem_map_lookup(epl_profiles, &profile_id)))
 	{
 		convo->profiles.CN = profile;
-		// TODO: leaks memory when profile is changed?
+		/* TODO: leaks memory when profile is changed? */
 		if (!wmem_array_get_count(convo->RPDO))
 		{
 			wmem_array_append(convo->RPDO,
@@ -3902,7 +3902,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 	return offset;
 }
 
-/** epl_tree may be null, so that this function can be called from the profile parser */
+/** epl_tree may be null here, when this function is called from the profile parser */
 static gint
 dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tree *epl_tree, tvbuff_t *tvb, guint32 framenum, gint offset, guint16 idx, guint8 subindex)
 {
@@ -3974,8 +3974,8 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	}
 	offset += 2;
 
-	map.title = "PDO"; // FIXME: more representative name
-	// maybe Digital.Output_00h_AU8.DigitalOutput: 128 (0x80) ?
+	map.title = "PDO"; /* FIXME: more representative name */
+	/* maybe Digital.Output_00h_AU8.DigitalOutput: 128 (0x80) ? */
 
 	add_object_mapping(mappings, &map);
 
@@ -5482,9 +5482,9 @@ profile_uat_update_record(void *_record, char **err)
 {
 #ifdef HAVE_LIBXML
 	const char *supported = "Only *.xdd, *.xdc and *.eds formats are supported.";
-#else /* HAVE_LIBXML */
+#else /* !HAVE_LIBXML */
 	const char *supported = "Only *.eds format is supported.";
-#endif /* HAVE_LIBXML */
+#endif /* !HAVE_LIBXML */
 
 	struct profile_uat_assoc *record = (struct profile_uat_assoc *)_record;
 
@@ -5495,10 +5495,10 @@ profile_uat_update_record(void *_record, char **err)
 	{
 #ifdef HAVE_LIBXML
 		return TRUE;
-#else /* HAVE_LIBXML */
+#else /* !HAVE_LIBXML */
 		*err = g_strdup_printf("*.xdd and *.xdc support not compiled in. %s", supported);
 		return FALSE;
-#endif /* HAVE_LIBXML */
+#endif /* !HAVE_LIBXML */
 	}
 
 	*err = g_strdup(supported);
