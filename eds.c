@@ -92,7 +92,7 @@ static char *
 epl_wmem_strdup_till(wmem_allocator_t *allocator, const char *str, char ch)
 {
 	if (!str) return NULL;
-	return wmem_memdup(allocator, str, epl_strchrnul(str, ch) - str);
+	return (char*)wmem_memdup(allocator, str, epl_strchrnul(str, ch) - str);
 }
 
 static void
@@ -103,7 +103,7 @@ lock_subindices(void *key _U_, void *value, void *user_data _U_)
 		epl_wmem_iarray_lock(subindices);
 }
 
-struct dataTypeMap {
+static struct dataTypeMap {
 	guint16 id;
 	const char *name;
 	struct dataTypeMap_in *type;
@@ -139,8 +139,7 @@ struct dataTypeMap {
 	{0x0000, NULL,		   NULL}
 };
 
-wmem_map_t *dataTypeMap;
-
+static wmem_map_t *dataTypeMap;
 
 void
 eds_init(void)
@@ -215,7 +214,7 @@ eds_load(wmem_allocator_t *parent_pool, guint16 id, const char *eds_file)
 
 		DataType = epl_g_key_file_get_uint16(gkf, *group, "DataType", NULL);
 		if (DataType)
-			tmpobj.type = wmem_map_lookup(dataTypeMap, &DataType);
+			tmpobj.type = (const struct dataTypeMap_in*)wmem_map_lookup(dataTypeMap, &DataType);
 
 		if ((name = g_key_file_get_string(gkf, *group, "ParameterName", NULL)))
 		{

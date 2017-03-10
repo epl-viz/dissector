@@ -1690,13 +1690,13 @@ static reassembly_table epl_reassembly_table;
 gboolean
 epl_g_int16_equal(gconstpointer v1, gconstpointer v2)
 {
-	return *(guint16*)v1 == *(guint16*)v2;
+	return *(const guint16*)v1 == *(const guint16*)v2;
 }
 
 guint
 epl_g_int16_hash(gconstpointer v)
 {
-	return *(guint16*)v;
+	return *(const guint16*)v;
 }
 
 struct object_mapping {
@@ -1721,12 +1721,13 @@ static struct object_mapping *
 get_object_mappings(wmem_array_t *arr, guint *len)
 {
 	*len = wmem_array_get_count(arr);
-	return wmem_array_get_raw(arr);
+	return (struct object_mapping*)wmem_array_get_raw(arr);
 }
 int
-object_mapping_cmp(const void *a_, const void *b_)
+object_mapping_cmp(const void *_a, const void *_b)
 {
-	const struct object_mapping *a = a_, *b = b_;
+	const struct object_mapping *a = (const struct object_mapping*)_a;
+	const struct object_mapping *b = (const struct object_mapping*)_b;
 
 	if (a->offset < b->offset) return -1;
 	if (a->offset > b->offset) return +1;
@@ -1875,7 +1876,7 @@ profile_object_mappings_update(struct profile *profile)
 	for (PDO = PDOs; *PDO; PDO++)
 	{
 		len = wmem_array_get_count(*PDO);
-		mappings = wmem_array_get_raw(*PDO);
+		mappings = (struct object_mapping*)wmem_array_get_raw(*PDO);
 
 		for (i = 0; i < len; i++)
 		{
@@ -2064,14 +2065,14 @@ object_lookup(struct profile *profile, guint16 idx)
 {
 	if (profile == NULL)
 		return NULL;
-	return wmem_map_lookup(profile->objects, &idx);
+	return (struct object*)wmem_map_lookup(profile->objects, &idx);
 }
 
 gboolean
 subobject_equal(gconstpointer _a, gconstpointer _b)
 {
-    const struct od_entry *a = &((struct subobject*)_a)->info;
-    const struct od_entry *b = &((struct subobject*)_b)->info;
+    const struct od_entry *a = &((const struct subobject*)_a)->info;
+    const struct od_entry *b = &((const struct subobject*)_b)->info;
 
     return a->kind == b->kind
 	    && a->type == b->type
@@ -4316,7 +4317,14 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 }
 
 
-static uat_field_t profile_list_uats_flds[];
+static uat_field_t profile_list_uats_flds[] = {
+	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "DeviceType", profile_uat_fld_devicetype_check_cb, "e.g. 401"),
+	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "VendorId", profile_uat_fld_devicetype_check_cb, "e.g. DEADBEEF"),*/
+	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "ProductCode", profile_uat_fld_devicetype_check_cb, "e.g. 8BADFOOD"),*/
+	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_check_cb, "Path to the EDS" IF_LIBXML("/XDD/XDC")),
+
+	UAT_END_FIELDS
+};
 
 /* Register the protocol with Wireshark */
 void
@@ -5405,17 +5413,6 @@ proto_register_epl(void)
 
 	puts("Loading EPL+XDD plugin (built on " __DATE__ " " __TIME__ ")");
 }
-
-static uat_field_t profile_list_uats_flds[] = {
-	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "DeviceType", profile_uat_fld_devicetype_check_cb, "e.g. 401"),
-	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "VendorId", profile_uat_fld_devicetype_check_cb, "e.g. DEADBEEF"),*/
-	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "ProductCode", profile_uat_fld_devicetype_check_cb, "e.g. 8BADFOOD"),*/
-	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_check_cb, "Path to the EDS" IF_LIBXML("/XDD/XDC")),
-
-	UAT_END_FIELDS
-};
-
-
 
 void
 proto_reg_handoff_epl(void)

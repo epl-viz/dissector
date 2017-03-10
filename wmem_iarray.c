@@ -96,6 +96,7 @@ epl_wmem_iarray_lock(epl_wmem_iarray_t *iarr)
 		elem = (range_admin_t*)((char*)elem + g_array_get_element_size(iarr->arr));
 
 again:
+            /* FIXME: always true! */
 			if (ABS(elem->low - prev->high) <= 1
 				&& iarr->equal(elem, prev)) {
 			prev->high = elem->high;

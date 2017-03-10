@@ -71,7 +71,7 @@ xdd_free(void)
 typedef int xpath_handler(xmlNodeSetPtr, void*);
 static xpath_handler populate_objectList, populate_dataTypeList, populate_profileName;
 
-struct namespace {
+static struct xpath_namespace {
 	const xmlChar *prefix, *href;
 } namespaces[] = {
 	{ BAD_CAST "x",   BAD_CAST "http://www.ethernet-powerlink.org" },
@@ -79,7 +79,7 @@ struct namespace {
 	{ NULL, NULL }
 };
 
-struct xpath {
+static struct xpath {
 	const xmlChar *expr;
 	xpath_handler *handler;
 } xpaths[] = {
@@ -104,7 +104,7 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 	struct profile *profile = NULL;
 	xmlXPathContextPtr xpathCtx = NULL;
 	xmlDoc *doc = NULL;
-	struct namespace *ns = NULL;
+	struct xpath_namespace *ns = NULL;
 	struct xpath *xpath = NULL;
 
 	/* Load XML document */
@@ -139,7 +139,7 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 	profile->path = wmem_strdup(profile->scope, xml_file);
 
 	/* mapping type ids to &hf_s */
-	profile->data = g_hash_table_new_full(epl_g_int16_hash, epl_g_int16_equal, NULL, g_free);
+	profile->data = (GHashTable*)g_hash_table_new_full(epl_g_int16_hash, epl_g_int16_equal, NULL, g_free);
 
 	/* Evaluate xpath expressions */
 	for (xpath = xpaths; xpath->expr; xpath++)
@@ -172,7 +172,7 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 fail:
 	if (profile && profile->data)
 	{
-		g_hash_table_destroy(profile->data);
+		g_hash_table_destroy((GHashTable*)profile->data);
 		profile_del(profile);
 	}
 
@@ -192,7 +192,7 @@ xdd_unload()
 static int
 populate_profileName(xmlNodeSetPtr nodes, void *_profile)
 {
-	struct profile *profile = _profile;
+	struct profile *profile = (struct profile*)_profile;
 	if (nodes->nodeNr == 1
 	&&  nodes->nodeTab[0]->type == XML_ELEMENT_NODE
 	&&  nodes->nodeTab[0]->children)
@@ -214,7 +214,7 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 {
 	xmlNodePtr cur;
 	int i;
-	struct profile *profile = _profile;
+	struct profile *profile = (struct profile*)_profile;
 
 	for(i = 0; i < nodes->nodeNr; ++i)
 	{
@@ -229,7 +229,8 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 		for(attr = cur->properties; attr; attr = attr->next)
 		{
 			char *endptr;
-			const char *key = (char*)attr->name, *val = (char*)attr->children->content;
+			const char *key = (const char*)attr->name;
+			const char *val = (const char*)attr->children->content;
 
 			if (g_str_equal("dataType", key))
 			{
@@ -252,7 +253,7 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 						type = g_new(struct dataType, 1);
 						type->id = idx;
 						type->ptr = ptr;
-						g_hash_table_insert(profile->data, &type->id, type);
+						g_hash_table_insert((GHashTable*)profile->data, &type->id, type);
 						continue;
 					}
 				}
@@ -294,7 +295,7 @@ parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 				guint16 id = epl_strtou16(val, &endptr, 16);
 				if (endptr != val)
 				{
-					struct dataType *type = g_hash_table_lookup(profile->data, &id);
+					struct dataType *type = (struct dataType*)g_hash_table_lookup((GHashTable*)profile->data, &id);
 					if (type) out->type = type->ptr;
 				}
 
@@ -320,10 +321,10 @@ parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 }
 
 static int
-populate_objectList(xmlNodeSetPtr nodes, void *data)
+populate_objectList(xmlNodeSetPtr nodes, void *_profile)
 {
 	int i;
-	struct profile *profile = data;
+	struct profile *profile = (struct profile*)_profile;
 
 	for(i = 0; i < nodes->nodeNr; ++i)
 	{
@@ -333,7 +334,7 @@ populate_objectList(xmlNodeSetPtr nodes, void *data)
 		if (!nodes->nodeTab[i] || nodes->nodeTab[i]->type != XML_ELEMENT_NODE)
 			continue;
 
-		parse_obj_tag(cur, &tmpobj, data);
+		parse_obj_tag(cur, &tmpobj, profile);
 
 		if (tmpobj.idx)
 		{
