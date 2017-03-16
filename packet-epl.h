@@ -98,5 +98,11 @@ struct object * object_lookup(struct profile *profile, guint16 idx);
 
 #define CHECK_OVERLAP(x, x_len, y, y_len) ((x) <= (y) + ((y_len)-1) && (y) <= (x) + ((x_len)-1))
 
+#if GLIB_CHECK_VERSION(2, 40, 0)
+#define EPL_INFO(...) g_info(__VA_ARGS__)
+#else
+#define EPL_INFO(...) 
+#endif
+
 #endif
 

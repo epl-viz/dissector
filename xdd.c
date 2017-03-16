@@ -247,7 +247,7 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 						const struct dataTypeMap_in *ptr = epl_type_to_hf((char*)subnode->name);
 						if (!ptr)
 						{
-							g_info("Skipping unknown type '%s'\n", subnode->name);
+							EPL_INFO("Skipping unknown type '%s'\n", subnode->name);
 							continue;
 						}
 						type = g_new(struct dataType, 1);
@@ -360,7 +360,7 @@ populate_objectList(xmlNodeSetPtr nodes, void *_profile)
 					}
 					if (subobj.info.value && profile_object_mapping_add(profile, obj->info.idx, subobj.info.idx, subobj.info.value))
 					{
-						g_info("Loaded mapping from XDC %s:%s", obj->info.name, subobj.info.name);
+						EPL_INFO("Loaded mapping from XDC %s:%s", obj->info.name, subobj.info.name);
 					}
 				}
 				epl_wmem_iarray_lock(obj->subindices);
