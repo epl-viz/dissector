@@ -2218,21 +2218,11 @@ setup_dissector(void)
 	memset(&epl_asnd_sdo_reassembly_read, 0, sizeof(epl_sdo_reassembly));
 	/* create reassembly table */
 	reassembly_table_init(&epl_reassembly_table, &addresses_reassembly_table_functions);
-
-	/* init device profiles support */
-
-	/* populate static address for convo */
-	set_address(&convo_mac, AT_NONE, 0, NULL);
 }
 
 static void
 cleanup_dissector(void)
 {
-
-#ifdef HAVE_LIBXML
-	xdd_free();
-#endif /*  HAVE_LIBXML */
-	eds_free();
 	reassembly_table_destroy(&epl_reassembly_table);
 	/*g_hash_free(epl_duplication_table);*/
 	count = 0;
@@ -5380,12 +5370,16 @@ proto_register_epl(void)
 		"If you want to parse the defaultValue (XDD) and actualValue (XDC) attributes for ObjectMappings in order to detect default PDO mappings, which may not be exchanged over SDO ", &read_xdc_for_mappings);
 #endif /* HAVE_LIBXML */
 
+	/* populate static address for convo */
+	set_address(&convo_mac, AT_NONE, 0, NULL);
+
+	/* init device profiles support */
 	epl_profiles = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
 
 #ifdef HAVE_LIBXML
 	xdd_init();
 #endif /* HAVE_LIBXML */
-
+	/* FIXME: where to call xdd_free? */
 	eds_init();
 
 	profile_uat = uat_new("EPL Device Profiles",
@@ -5451,7 +5445,7 @@ profile_parse_uat(void)
 #endif /* HAVE_LIBXML */
 
 		if (profile)
-			g_info("Loading %s\n", profile->path);
+			EPL_INFO("Loading %s\n", profile->path);
 	}
 }
 
