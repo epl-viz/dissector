@@ -92,7 +92,7 @@ static char *
 epl_wmem_strdup_till(wmem_allocator_t *allocator, const char *str, char ch)
 {
 	if (!str) return NULL;
-	return (char*)wmem_memdup(allocator, str, epl_strchrnul(str, ch) - str);
+	return (char*)wmem_strndup(allocator, str, epl_strchrnul(str, ch) - str);
 }
 
 static void
