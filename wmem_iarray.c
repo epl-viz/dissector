@@ -29,6 +29,9 @@
 
 #include "config.h"
 
+/* ABS(x - y) wouldn't work for unsigned x/y */
+#define EPL_ABS_DIFF(x, y) (MAX((x),(y)) - MIN((x),(y)))
+
 static gboolean
 free_garray(wmem_allocator_t *scope _U_, wmem_cb_event_t event _U_, void *data)
 {
@@ -96,8 +99,7 @@ epl_wmem_iarray_lock(epl_wmem_iarray_t *iarr)
 		elem = (range_admin_t*)((char*)elem + g_array_get_element_size(iarr->arr));
 
 again:
-            /* FIXME: always true! */
-			if (ABS(elem->low - prev->high) <= 1
+			if (EPL_ABS_DIFF(elem->low, prev->high) <= 1
 				&& iarr->equal(elem, prev)) {
 			prev->high = elem->high;
 			g_array_remove_index(iarr->arr, i);
