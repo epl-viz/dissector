@@ -42,6 +42,8 @@ const struct dataTypeMap_in *epl_type_to_hf(const char *name);
 
 struct profile {
 	guint16 id;
+    guint32 VendorId;
+    guint32 ProductCode;
 	wmem_map_t *objects;
 	wmem_allocator_t *scope, *parent_scope;
 	char *name;
@@ -50,6 +52,8 @@ struct profile {
     guint cb_id;
     wmem_array_t *TPDO; /* CN->MN */
     wmem_array_t *RPDO; /* MN->CN */
+
+    struct profile *next;
 };
 
 #define OD_ENTRY_NO_SUBINDICES 7

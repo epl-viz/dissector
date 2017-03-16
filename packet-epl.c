@@ -82,8 +82,10 @@
 
 /* User Access Table */
 struct profile_uat_assoc {
-	char *DeviceTypeString;
 	guint DeviceType;
+	guint VendorId;
+	guint ProductCode;
+
 	char *path;
 };
 
@@ -92,9 +94,12 @@ static void profile_uat_free_cb(void *r);
 static gboolean profile_uat_update_record(void *r, char **err);
 static void profile_parse_uat(void);
 static gboolean profile_uat_fld_fileopen_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
-static gboolean profile_uat_fld_devicetype_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
+static gboolean profile_uat_fld_uint16dec_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
+static gboolean profile_uat_fld_uint32hex_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
 
-UAT_CSTRING_CB_DEF(profile_list_uats, DeviceTypeString, struct profile_uat_assoc)
+UAT_DEC_CB_DEF(profile_list_uats, DeviceType, struct profile_uat_assoc)
+UAT_HEX_CB_DEF(profile_list_uats, VendorId, struct profile_uat_assoc)
+UAT_HEX_CB_DEF(profile_list_uats, ProductCode, struct profile_uat_assoc)
 UAT_FILENAME_CB_DEF(profile_list_uats, path, struct profile_uat_assoc)
 
 void proto_register_epl(void);
@@ -1786,7 +1791,7 @@ struct profile *
 profile_new(wmem_allocator_t *parent_pool, guint16 id)
 {
 	wmem_allocator_t *pool;
-	struct profile *profile;
+	struct profile *profile, *profile_head;
 	
 	pool = wmem_allocator_new(WMEM_ALLOCATOR_SIMPLE);
 	profile = wmem_new0(pool, struct profile);
@@ -1800,8 +1805,16 @@ profile_new(wmem_allocator_t *parent_pool, guint16 id)
 	profile->path = NULL;
 	profile->RPDO = wmem_array_new(pool, sizeof (struct object_mapping));
 	profile->TPDO = wmem_array_new(pool, sizeof (struct object_mapping));
+	profile->next = NULL;
+
+	if ((profile_head = wmem_map_lookup(epl_profiles, &profile->id)))
+	{
+		wmem_map_remove(epl_profiles, &profile_head->id);
+		profile->next = profile_head;
+	}
 
 	wmem_map_insert(epl_profiles, &profile->id, profile);
+
 	return profile;
 }
 
@@ -2034,25 +2047,37 @@ epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 }
 
 gboolean
-epl_update_convo_cn_profile(struct epl_convo *convo, guint16 profile_id)
+epl_update_convo_cn_profile(struct epl_convo *convo)
 {
-	struct profile *profile;
-	if ((profile = (struct profile*)wmem_map_lookup(epl_profiles, &profile_id)))
+	struct profile *candidate; /* Best matching profile */
+	if ((candidate = (struct profile*)wmem_map_lookup(epl_profiles, &convo->DeviceType)))
 	{
-		convo->profiles.CN = profile;
+		struct profile *iter = candidate;
+		do {
+			if ((iter->VendorId == 0 && convo->ProductCode == 0 && !candidate->VendorId)
+			|| (iter->VendorId == convo->VendorId && !candidate->ProductCode)
+			|| (iter->VendorId == convo->VendorId &&  iter->ProductCode == convo->ProductCode))
+			{
+				candidate = iter;
+			}
+
+		} while ((iter = iter->next));
+
+
+		convo->profiles.CN = candidate;
 		/* TODO: leaks memory when profile is changed? */
 		if (!wmem_array_get_count(convo->RPDO))
 		{
 			wmem_array_append(convo->RPDO,
-				wmem_array_get_raw(profile->RPDO),
-				wmem_array_get_count(profile->RPDO)
+				wmem_array_get_raw(candidate->RPDO),
+				wmem_array_get_count(candidate->RPDO)
 			);
 		}
 		if (!wmem_array_get_count(convo->TPDO))
 		{
 			wmem_array_append(convo->TPDO,
-				wmem_array_get_raw(profile->TPDO),
-				wmem_array_get_count(profile->TPDO)
+				wmem_array_get_raw(candidate->TPDO),
+				wmem_array_get_count(candidate->TPDO)
 			);
 		}
 		return TRUE;
@@ -3114,7 +3139,7 @@ dissect_epl_asnd_ires(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *t
 								convo->DeviceType, val_to_str_const(convo->DeviceType, epl_device_profiles, "Unknown Profile"), additional);
 
 	ti = proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_profile, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-	epl_update_convo_cn_profile(convo, convo->DeviceType);
+	epl_update_convo_cn_profile(convo);
 	if (convo->profiles.CN)
 	{
 		if (convo->profiles.CN->name)
@@ -4308,9 +4333,10 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 
 
 static uat_field_t profile_list_uats_flds[] = {
-	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "DeviceType", profile_uat_fld_devicetype_check_cb, "e.g. 401"),
-	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "VendorId", profile_uat_fld_devicetype_check_cb, "e.g. DEADBEEF"),*/
-	/*UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceTypeString, "ProductCode", profile_uat_fld_devicetype_check_cb, "e.g. 8BADFOOD"),*/
+	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceType, "DeviceType", profile_uat_fld_uint16dec_check_cb, "e.g. 401"),
+	UAT_FLD_CSTRING_OTHER(profile_list_uats, VendorId, "VendorId", profile_uat_fld_uint32hex_check_cb, "e.g. DEADBEEF"),
+	UAT_FLD_CSTRING_OTHER(profile_list_uats, ProductCode, "ProductCode", profile_uat_fld_uint32hex_check_cb, "e.g. 8BADFOOD"),
+
 	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_check_cb, "Path to the EDS" IF_LIBXML("/XDD/XDC")),
 
 	UAT_END_FIELDS
@@ -5424,7 +5450,12 @@ proto_reg_handoff_epl(void)
 static void
 reload_profiles(void *key _U_, void *value, void *user_data _U_)
 {
-	profile_del((struct profile*)value);
+	struct profile *head = (struct profile*)value, *curr;
+	while ((curr = head))
+	{
+	    head = head->next;
+	    profile_del(curr);
+	}
 }
 
 static void
@@ -5443,6 +5474,9 @@ profile_parse_uat(void)
 		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".xdc"))
 			profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
 #endif /* HAVE_LIBXML */
+
+		profile->VendorId = uat->VendorId;
+		profile->ProductCode = uat->ProductCode;
 
 		if (profile)
 			EPL_INFO("Loading %s\n", profile->path);
@@ -5482,12 +5516,10 @@ profile_uat_update_record(void *_record, char **err)
 }
 
 static void
-profile_uat_free_cb(void *r)
+profile_uat_free_cb(void *_r)
 {
-	struct profile_uat_assoc *h = (struct profile_uat_assoc *)r;
-
-	g_free(h->path);
-	g_free(h->DeviceTypeString);
+	struct profile_uat_assoc *r = (struct profile_uat_assoc *)_r;
+	g_free(r->path);
 }
 
 static void*
@@ -5496,18 +5528,17 @@ profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_)
 	const struct profile_uat_assoc *src = (const struct profile_uat_assoc *)src_;
 	struct profile_uat_assoc       *dst = (struct profile_uat_assoc *)dst_;
 
-	dst->path   = g_strdup(src->path);
-	dst->DeviceTypeString = g_strdup(src->DeviceTypeString);
-	dst->DeviceType = src->DeviceType;
+	dst->path        = g_strdup(src->path);
+	dst->DeviceType  = src->DeviceType;
+	dst->VendorId    = src->VendorId;
+	dst->ProductCode = src->ProductCode;
 
 	return dst;
 }
 
 static gboolean
-profile_uat_fld_devicetype_check_cb(void *_record _U_, const char *str, guint len _U_, const void *chk_data _U_, const void *fld_data _U_, char **err)
+profile_uat_fld_uint16dec_check_cb(void *_record _U_, const char *str, guint len _U_, const void *chk_data _U_, const void *fld_data _U_, char **err)
 {
-	struct profile_uat_assoc *record = (struct profile_uat_assoc*)_record;
-
 	char *endptr;
 	unsigned long val = strtoul(str, &endptr, 10);
 	if (val > G_MAXUINT16 || endptr != str + len)
@@ -5515,7 +5546,19 @@ profile_uat_fld_devicetype_check_cb(void *_record _U_, const char *str, guint le
 		*err = g_strdup("Invalid argument. Expected a decimal between [0-65535]");
 		return FALSE;
 	}
-	record->DeviceType = (guint16)val;
+	return TRUE;
+}
+
+static gboolean
+profile_uat_fld_uint32hex_check_cb(void *_record _U_, const char *str, guint len _U_, const void *chk_data _U_, const void *fld_data _U_, char **err)
+{
+	char *endptr;
+	unsigned long val = strtoul(str, &endptr, 16);
+	if (val > G_MAXUINT32 || endptr != str + len)
+	{
+		*err = g_strdup("Invalid argument. Expected a hexadecimal between [0-ffffffff]");
+		return FALSE;
+	}
 	return TRUE;
 }
 
