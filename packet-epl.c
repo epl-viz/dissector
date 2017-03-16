@@ -1849,8 +1849,8 @@ profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex
 	else
 		return FALSE;
 
-	phtolell(((guint8*)&mapping_le), mapping);
-	tvb = tvb_new_real_data((guint8*)&mapping, sizeof mapping, sizeof mapping);
+	mapping_le = GUINT64_TO_LE(mapping);
+	tvb = tvb_new_real_data((guint8*)&mapping_le, sizeof mapping_le, sizeof mapping_le);
 
 	return dissect_object_mapping(profile, mappings, NULL, tvb, 0, 0, idx, subindex) == sizeof mapping;
 }

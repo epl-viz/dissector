@@ -34,22 +34,6 @@
 #pragma GCC diagnostic ignored "-Wmissing-braces"
 #endif
 
-/* copied from <wiretap/wtap-int.h> */
-#ifndef phtolell
-#define phtolell(p, v) \
-    {                 \
-        (p)[0] = (guint8)((v) >> 0);     \
-        (p)[1] = (guint8)((v) >> 8);     \
-        (p)[2] = (guint8)((v) >> 16);    \
-        (p)[3] = (guint8)((v) >> 24);    \
-        (p)[4] = (guint8)((v) >> 32);    \
-        (p)[5] = (guint8)((v) >> 40);    \
-        (p)[6] = (guint8)((v) >> 48);    \
-        (p)[7] = (guint8)((v) >> 56);    \
-    }
-#endif
-
-
 gboolean epl_g_int16_equal(gconstpointer v1, gconstpointer v2);
 guint epl_g_int16_hash(gconstpointer v);
 
