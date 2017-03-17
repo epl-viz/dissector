@@ -1278,7 +1278,7 @@ static gint dissect_epl_ainv(struct epl_convo *convo, proto_tree *epl_tree, tvbu
 
 static gint dissect_epl_asnd_sdo(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_asnd_resp(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
-static gint dissect_epl_sdo_sequence(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
+static gint dissect_epl_sdo_sequence(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_sdo_command(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size);
 static gint dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size);
@@ -1948,7 +1948,44 @@ struct epl_convo {
 	struct {
 		struct profile *CN, *MN;
 	} profiles;
+
+	guint8 next_read_req;
+	guint8 seq_send;
+	
+	struct read_req {
+		guint16 idx;
+		guint8 subindex;
+
+		guint8 sendsequence :6;
+
+		const char *index_name;
+
+		struct od_entry *info;
+	} read_reqs[32]; /* We queue 32 read requests for every CN */
+	/* XXX: Way too big! Fix this and use frame data instead? */
 };
+
+static struct read_req *
+convo_read_req_get(struct epl_convo *convo, guint8 SendSequenceNumber)
+{
+	guint i;
+	for (i = 0; i < array_length(convo->read_reqs); i++)
+	{
+		if(convo->read_reqs[i].sendsequence == SendSequenceNumber)
+			return &convo->read_reqs[i];
+	}
+
+	return NULL;
+}
+static struct read_req *
+convo_read_req_set(struct epl_convo *convo, guint8 SendSequenceNumber)
+{
+	struct read_req *slot = &convo->read_reqs[convo->next_read_req++];
+	convo->next_read_req %= array_length(convo->read_reqs);
+	slot->sendsequence = SendSequenceNumber;
+	return slot;
+}
+
 
 static int
 call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint offset, guint len, guint8 msgType)
@@ -2040,6 +2077,7 @@ epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 
 		convo->profiles.CN = NULL;
 		convo->profiles.MN = NULL;
+		convo->seq_send = 0xFF;
 
 		conversation_add_proto_data(epan_conversation, proto_epl, (void *)convo);
 	}
@@ -3350,7 +3388,7 @@ gint
 dissect_epl_asnd_sdo(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset)
 {
 	guint16 seqnum = 0x00;
-	offset = dissect_epl_sdo_sequence(epl_tree, tvb, pinfo, offset);
+	offset = dissect_epl_sdo_sequence(convo, epl_tree, tvb, pinfo, offset);
 
 	seqnum = epl_get_sequence_nr(pinfo);
 
@@ -3367,7 +3405,7 @@ dissect_epl_asnd_sdo(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tv
 }
 
 gint
-dissect_epl_sdo_sequence(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset)
+dissect_epl_sdo_sequence(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset)
 {
 	guint8 seq_recv = 0x00, seq_send = 0x00, rcon = 0x00, scon = 0x00;
 	guint32 frame = 0x00;
@@ -3493,7 +3531,7 @@ dissect_epl_sdo_sequence(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo
 	proto_tree_add_uint(sod_seq_tree, hf_epl_asnd_sdo_seq_receive_con,             tvb, offset, 1, seq_recv);
 	offset += 1;
 
-	seq_send = tvb_get_guint8(tvb, offset);
+	convo->seq_send = (seq_send = tvb_get_guint8(tvb, offset)) >> 2;
 
 	proto_tree_add_uint(sod_seq_tree, hf_epl_asnd_sdo_seq_send_sequence_number, tvb, offset, 1, seq_send);
 	proto_tree_add_uint(sod_seq_tree, hf_epl_asnd_sdo_seq_send_con, tvb, offset, 1, seq_send);
@@ -4241,6 +4279,7 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 	fragment_head *frag_msg = NULL;
 	struct object *obj = NULL;
 	struct subobject *subobj = NULL;
+	struct read_req *req;
 
 	/* get the current frame number */
 	frame = pinfo->num;
@@ -4273,6 +4312,18 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 						 segment_size, idx, subindex);
 		col_append_fstr(pinfo->cinfo, COL_INFO, " (%s", val_to_str_ext_const(((guint32) (idx << 16)), &sod_index_names, "User Defined"));
 		col_append_fstr(pinfo->cinfo, COL_INFO, "/%s)",val_to_str_ext_const((subindex|(idx<<16)), &sod_index_names, "User Defined"));
+
+		/* Cache object for read in next response */
+		req = convo_read_req_set(convo, convo->seq_send);
+		req->idx = idx;
+		req->subindex = subindex;
+		if (obj) {
+			req->info = subobj ? &subobj->info : &obj->info;
+			req->index_name = obj->info.name;
+		} else {
+			req->info = NULL;
+			req->index_name = NULL;
+		}
 	}
 	else
 	{
@@ -4347,6 +4398,21 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 		col_append_str(pinfo->cinfo, COL_INFO, "Response");
 
 		size = tvb_reported_length_remaining(tvb, offset);
+
+		/* Did we register the read req? */
+		if ((req = convo_read_req_get(convo, convo->seq_send))) {
+			proto_item *ti;
+			ti = proto_tree_add_uint_format_value(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, 0, 0, req->idx, "%04X", req->idx);
+			PROTO_ITEM_SET_GENERATED(ti);
+			if (req->info)
+				proto_item_append_text (ti, " (%s)", req->index_name);
+
+			ti = proto_tree_add_uint_format_value(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, 0, 0, req->subindex, "%02X", req->subindex);
+			PROTO_ITEM_SET_GENERATED(ti);
+
+			if (req->info && req->info->name != req->index_name)
+				proto_item_append_text (ti, " (%s)", req->info->name);
+		}
 		offset = dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_ASND );
 	}
 
@@ -5395,6 +5461,7 @@ proto_register_epl(void)
 
 	/* Required function calls to register the header fields and subtrees used */
 	proto_register_field_array(proto_epl, hf, array_length(hf));
+
 	proto_register_subtree_array(ett, array_length(ett));
 
 	/* Register expert information field */
