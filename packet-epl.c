@@ -1741,12 +1741,12 @@ object_mapping_cmp(const void *_a, const void *_b)
 gboolean
 object_mapping_eq(struct object_mapping *a, struct object_mapping *b)
 {
-	return 	(  a->pdo.idx == b->pdo.idx
-		&& a->pdo.subindex == b->pdo.subindex
-		&& a->frame.first == b->frame.first
-		&& a->frame.last == b->frame.last
-		&& a->param.idx == b->param.idx
-		&& a->param.subindex == b->param.subindex);
+	return a->pdo.idx == b->pdo.idx
+	    && a->pdo.subindex == b->pdo.subindex
+	    && a->frame.first == b->frame.first
+	    && a->frame.last == b->frame.last
+	    && a->param.idx == b->param.idx
+	    && a->param.subindex == b->param.subindex;
 }
 static guint
 add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping)
@@ -2096,10 +2096,10 @@ object_lookup(struct profile *profile, guint16 idx)
 gboolean
 subobject_equal(gconstpointer _a, gconstpointer _b)
 {
-    const struct od_entry *a = &((const struct subobject*)_a)->info;
-    const struct od_entry *b = &((const struct subobject*)_b)->info;
+	const struct od_entry *a = &((const struct subobject*)_a)->info;
+	const struct od_entry *b = &((const struct subobject*)_b)->info;
 
-    return a->kind == b->kind
+	return a->kind == b->kind
 	    && a->type == b->type
 	    && g_str_equal(a->name, b->name);
 }
@@ -2475,7 +2475,7 @@ dissect_eplpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean udp
 			break;
 
 	           /* Default case can not happen as it is caught by an earlier switch
-	                   *                       statement */
+	            *                       statement */
 	}
 
 
@@ -5463,8 +5463,8 @@ reload_profiles(void *key _U_, void *value, void *user_data _U_)
 	struct profile *head = (struct profile*)value, *curr;
 	while ((curr = head))
 	{
-	    head = head->next;
-	    profile_del(curr);
+		head = head->next;
+		profile_del(curr);
 	}
 }
 
@@ -5474,8 +5474,8 @@ profile_parse_uat(void)
 	guint i;
 	struct profile *profile = NULL;
 	wmem_map_foreach(epl_profiles, reload_profiles, NULL);
-        for (i = 0; i < nprofile_uat; i++)
-        {
+	for (i = 0; i < nprofile_uat; i++)
+	{
 		struct profile_uat_assoc *uat = &(profile_list_uats[i]);
 
 		if (g_str_has_suffix(uat->path, ".eds"))
