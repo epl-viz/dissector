@@ -52,7 +52,7 @@ epl_wmem_iarray_new(wmem_allocator_t *scope, const guint elem_size, GEqualFunc e
 	iarr->equal = equal;
 	iarr->scope = scope;
 	iarr->arr = g_array_new(FALSE, FALSE, elem_size);
-	iarr->flags.dirty = 0;
+	iarr->flags.dirty = 0; /* TODO: unused */
 
 	wmem_register_callback(scope, free_garray, iarr->arr);
 

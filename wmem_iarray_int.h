@@ -30,7 +30,7 @@ struct _epl_wmem_iarray {
 	GArray *arr;
 	guint cb_id;
 	struct {
-		unsigned dirty:1;
+		unsigned dirty :1;
 	} flags;
 };
 #endif

@@ -82,11 +82,11 @@
 
 /* User Access Table */
 struct profile_uat_assoc {
+	char *path;
+
 	guint DeviceType;
 	guint VendorId;
 	guint ProductCode;
-
-	char *path;
 };
 
 static void *profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
@@ -1937,8 +1937,8 @@ find_or_create_conversation_epl(packet_info *pinfo, guint8 cn_addr)
 struct epl_convo {
 	guint8 CN;
 
-	guint32 ResponseTime;
 	guint16 DeviceType;
+	guint32 ResponseTime;
 	guint32 VendorId;
 	guint32 ProductCode;
 
