@@ -1745,7 +1745,6 @@ object_mapping_eq(struct object_mapping *a, struct object_mapping *b)
 	return a->pdo.idx == b->pdo.idx
 	    && a->pdo.subindex == b->pdo.subindex
 	    && a->frame.first == b->frame.first
-	    && a->frame.last == b->frame.last
 	    && a->param.idx == b->param.idx
 	    && a->param.subindex == b->param.subindex;
 }
@@ -1760,13 +1759,12 @@ add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping)
 	{
 		/* XXX Test this more */
 		if (object_mapping_eq(&old[i], mapping))
-		{
-			old[i] = *mapping;
 			return len;
-		}
 
-		if (CHECK_OVERLAP(old[i].offset, old[i].len, mapping->offset, mapping->len)
-				&& old[i].frame.first < mapping->frame.first)
+		if (old[i].frame.first < mapping->frame.first
+		  && (CHECK_OVERLAP_LENGTH(old[i].offset, old[i].len, mapping->offset, mapping->len)
+		  || (old[i].param.idx == mapping->param.idx && old[i].param.subindex == mapping->param.subindex
+		  && CHECK_OVERLAP_ENDS(old[i].frame.first, old[i].frame.last, mapping->frame.first, mapping->frame.last))))
 		{
 			old[i].frame.last = mapping->frame.first;
 		}
@@ -5560,7 +5558,7 @@ profile_parse_uat(void)
 {
 	guint i;
 	struct profile *profile = NULL;
-	GHashTable *convos;
+	/*GHashTable *convos;*/
 	wmem_map_foreach(epl_profiles, reload_profiles, NULL);
 
 	/* PDO Mappings can have dangling pointers after a profile change

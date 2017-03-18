@@ -84,7 +84,9 @@ gboolean profile_object_mapping_add(struct profile *profile, guint16 idx, guint8
 gboolean profile_object_mappings_update(struct profile *profile);
 struct object * object_lookup(struct profile *profile, guint16 idx);
 
-#define CHECK_OVERLAP(x, x_len, y, y_len) ((x) <= (y) + ((y_len)-1) && (y) <= (x) + ((x_len)-1))
+#define CHECK_OVERLAP_ENDS(x1, x2, y1, y2) ((x1) < (y2) && (y1) < (x2))
+#define CHECK_OVERLAP_LENGTH(x, x_len, y, y_len) \
+    CHECK_OVERLAP_ENDS((x), (x) + (x_len), (y), (y) + (y_len))
 
 #if GLIB_CHECK_VERSION(2, 40, 0)
 #define EPL_INFO(...) g_info(__VA_ARGS__)
