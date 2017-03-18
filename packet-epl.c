@@ -76,6 +76,7 @@
 #include <epan/proto_data.h>
 #include <epan/uat.h>
 #include <wsutil/file_util.h>
+#include <wsutil/report_err.h>
 #include <glib.h>
 #include <string.h>
 #include <errno.h>
@@ -5582,44 +5583,23 @@ profile_parse_uat(void)
 			profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
 #endif /* HAVE_LIBXML */
 
-		profile->VendorId = uat->VendorId;
-		profile->ProductCode = uat->ProductCode;
-
 		if (profile)
+		{
+			profile->VendorId = uat->VendorId;
+			profile->ProductCode = uat->ProductCode;
 			EPL_INFO("Loading %s\n", profile->path);
+		}
+		else
+		{
+			report_failure("Profile couldn't be parsed.");
+		}
 	}
 }
 
 static gboolean
-profile_uat_update_record(void *_record, char **err)
+profile_uat_update_record(void *_record _U_, char **err _U_)
 {
-#ifdef HAVE_LIBXML
-	const char *supported = "Only *.xdd, *.xdc and *.eds formats are supported.";
-#else /* !HAVE_LIBXML */
-	const char *supported = "Only *.eds format is supported.";
-#endif /* !HAVE_LIBXML */
-
-	struct profile_uat_assoc *record = (struct profile_uat_assoc *)_record;
-
-	if (g_str_has_suffix(record->path, ".eds"))
-	{
-		*err = NULL;
-		return TRUE;
-	}
-	
-	if (g_str_has_suffix(record->path, ".xdd") || g_str_has_suffix(record->path, ".xdc"))
-	{
-#ifdef HAVE_LIBXML
-		*err = NULL;
-		return TRUE;
-#else /* !HAVE_LIBXML */
-		*err = g_strdup_printf("*.xdd and *.xdc support not compiled in. %s", supported);
-		return FALSE;
-#endif /* !HAVE_LIBXML */
-	}
-
-	*err = g_strdup(supported);
-	return FALSE;
+	return TRUE;
 }
 
 static void
@@ -5672,7 +5652,9 @@ profile_uat_fld_uint32hex_check_cb(void *_record _U_, const char *str, guint len
 static gboolean
 profile_uat_fld_fileopen_check_cb(void *record _U_, const char *path, guint len, const void *chk_data _U_, const void *fld_data _U_, char **err)
 {
+	const char *supported = "Only" IF_LIBXML(" *.xdd, *.xdc and") " *.eds profiles supported.";
 	ws_statb64 st;
+
 
 	if (!path || !len)
 	{
@@ -5686,9 +5668,26 @@ profile_uat_fld_fileopen_check_cb(void *record _U_, const char *path, guint len,
 		return FALSE;
 	}
 
-	/* file exists */
-	*err = NULL;
-	return TRUE;
+
+	if (g_str_has_suffix(path, ".eds"))
+	{
+		*err = NULL;
+		return TRUE;
+	}
+	
+	if (g_str_has_suffix(path, ".xdd") || g_str_has_suffix(path, ".xdc"))
+	{
+#ifdef HAVE_LIBXML
+		*err = NULL;
+		return TRUE;
+#else /* !HAVE_LIBXML */
+		*err = g_strdup_printf("*.xdd and *.xdc support not compiled in. %s", supported);
+		return FALSE;
+#endif /* !HAVE_LIBXML */
+	}
+
+	*err = g_strdup(supported);
+	return FALSE;
 }
 
 
