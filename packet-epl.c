@@ -1704,6 +1704,7 @@ epl_g_int16_hash(gconstpointer v)
 	return *(const guint16*)v;
 }
 
+static wmem_allocator_t *pdo_mapping_scope;
 struct object_mapping {
 	struct {
 		guint16 idx;
@@ -1847,7 +1848,6 @@ profile_object_lookup_or_add(struct profile *profile, guint16 idx)
 gboolean
 profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping)
 {
-	
 	wmem_array_t *mappings;
 	tvbuff_t *tvb;
 	guint64 mapping_le;
@@ -1959,7 +1959,6 @@ struct epl_convo {
 		guint8 sendsequence :6;
 
 		const char *index_name;
-
 		struct od_entry *info;
 	} read_reqs[32]; /* We queue 32 read requests for every CN */
 	/* XXX: Way too big! Fix this and use frame data instead? */
@@ -2072,8 +2071,8 @@ epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 	{
 		convo = wmem_new(wmem_file_scope(), struct epl_convo);
 		convo->CN = cn_addr;
-		convo->TPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
-		convo->RPDO = wmem_array_new(wmem_file_scope(), sizeof (struct object_mapping));
+		convo->TPDO = wmem_array_new(pdo_mapping_scope, sizeof (struct object_mapping));
+		convo->RPDO = wmem_array_new(pdo_mapping_scope, sizeof (struct object_mapping));
 
 		convo->profiles.CN = NULL;
 		convo->profiles.MN = NULL;
@@ -2128,6 +2127,7 @@ object_lookup(struct profile *profile, guint16 idx)
 {
 	if (profile == NULL)
 		return NULL;
+
 	return (struct object*)wmem_map_lookup(profile->objects, &idx);
 }
 
@@ -2281,11 +2281,15 @@ setup_dissector(void)
 	memset(&epl_asnd_sdo_reassembly_read, 0, sizeof(epl_sdo_reassembly));
 	/* create reassembly table */
 	reassembly_table_init(&epl_reassembly_table, &addresses_reassembly_table_functions);
+	/* free object mappings in one swoop */
+	pdo_mapping_scope = wmem_allocator_new(WMEM_ALLOCATOR_SIMPLE);
 }
 
 static void
 cleanup_dissector(void)
 {
+	wmem_destroy_allocator(pdo_mapping_scope);
+	pdo_mapping_scope = NULL;
 	reassembly_table_destroy(&epl_reassembly_table);
 	/*g_hash_free(epl_duplication_table);*/
 	count = 0;
@@ -4009,7 +4013,11 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	proto_item_append_text(psf_item, " bits");
 	offset += 2;
 
-	map.title = "PDO"; /* FIXME: more representative name */
+	if (map.info->name == map.index_name)
+		map.title = g_strdup_printf("PDO - %04X", map.pdo.idx);
+	else
+		map.title = g_strdup_printf("PDO - %04X:%02X", map.pdo.idx, map.pdo.subindex);
+		
 	/* maybe Digital.Output_00h_AU8.DigitalOutput: 128 (0x80) ? */
 
 	add_object_mapping(mappings, &map);
@@ -5552,7 +5560,19 @@ profile_parse_uat(void)
 {
 	guint i;
 	struct profile *profile = NULL;
+	GHashTable *convos;
 	wmem_map_foreach(epl_profiles, reload_profiles, NULL);
+
+	/* PDO Mappings can have dangling pointers after a profile change
+	 * so we reset the memory pool. As PDO Mappings are refereneced
+	 * via Conversations, we need to fix up those too. As we reparse
+	 * the file anyway, let's just clear them
+	 */
+
+	if (pdo_mapping_scope) wmem_free_all(pdo_mapping_scope);
+	/*if ((convos = get_conversation_hashtable_no_addr2_or_port2()))*/
+		/*g_hash_table_remove_all(convos);*/
+
 	for (i = 0; i < nprofile_uat; i++)
 	{
 		struct profile_uat_assoc *uat = &(profile_list_uats[i]);
