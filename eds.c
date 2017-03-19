@@ -159,9 +159,8 @@ eds_free(void)
 }
 
 struct profile *
-eds_load(wmem_allocator_t *parent_pool, guint16 id, const char *eds_file)
+eds_load(struct profile *profile, const char *eds_file)
 {
-	struct profile *profile = NULL;
 	GKeyFile* gkf;
 	GError *err;
 	char **group, **groups;
@@ -173,11 +172,10 @@ eds_load(wmem_allocator_t *parent_pool, guint16 id, const char *eds_file)
 	/* Load EDS document */
 	if (!g_key_file_load_from_file(gkf, eds_file, G_KEY_FILE_NONE, &err)){
 		g_warning("Error: unable to parse file \"%s\"\n", eds_file);
-	    goto cleanup;
+		profile = NULL;
+		goto cleanup;
 	}
 
-	/* Allocate profile */
-	profile = profile_new(parent_pool, id);
 	profile->path = wmem_strdup(profile->scope, eds_file);
 
 	val = g_key_file_get_string(gkf, "FileInfo", "Description", NULL);

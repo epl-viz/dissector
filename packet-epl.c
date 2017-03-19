@@ -81,27 +81,6 @@
 #include <string.h>
 #include <errno.h>
 
-/* User Access Table */
-struct profile_uat_assoc {
-	char *path;
-
-	guint DeviceType;
-	guint VendorId;
-	guint ProductCode;
-};
-
-static void *profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
-static void profile_uat_free_cb(void *r);
-static gboolean profile_uat_update_record(void *r, char **err);
-static void profile_parse_uat(void);
-static gboolean profile_uat_fld_fileopen_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
-static gboolean profile_uat_fld_uint16dec_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
-static gboolean profile_uat_fld_uint32hex_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
-
-UAT_DEC_CB_DEF(profile_list_uats, DeviceType, struct profile_uat_assoc)
-UAT_HEX_CB_DEF(profile_list_uats, VendorId, struct profile_uat_assoc)
-UAT_HEX_CB_DEF(profile_list_uats, ProductCode, struct profile_uat_assoc)
-UAT_FILENAME_CB_DEF(profile_list_uats, path, struct profile_uat_assoc)
 
 void proto_register_epl(void);
 void proto_reg_handoff_epl(void);
@@ -127,6 +106,7 @@ typedef struct _epl_info_t {
 #define EPL_DIAGNOSTIC_DEVICE_NODEID            253
 #define EPL_TO_LEGACY_ETHERNET_ROUTER_NODEID    254
 #define EPL_BROADCAST_NODEID                    255
+#define EPL_IS_CN_NODEID(nodeid) (EPL_DYNAMIC_NODEID < (nodeid) && (nodeid) < EPL_MN_NODEID)
 
 static const value_string addr_str_vals[] = {
 	{EPL_DYNAMIC_NODEID,                    " (Dynamically assigned)"           },
@@ -1291,10 +1271,6 @@ static const gchar* decode_epl_address(guchar adr);
 /* Initialize the protocol and registered fields */
 static gint proto_epl            = -1;
 
-static uat_t *profile_uat = NULL;
-static struct profile_uat_assoc *profile_list_uats = NULL;
-static guint nprofile_uat = 0;
-
 static gint hf_epl_mtyp          = -1;
 static gint hf_epl_node          = -1;
 static gint hf_epl_dest          = -1;
@@ -1687,12 +1663,6 @@ static gint ett_epl_asnd_sdo_data_reassembled = -1;
 static reassembly_table epl_reassembly_table;
 
 
-#define EPL_DYNAMIC_NODEID                        0
-#define EPL_MN_NODEID                           240
-#define EPL_DIAGNOSTIC_DEVICE_NODEID            253
-#define EPL_TO_LEGACY_ETHERNET_ROUTER_NODEID    254
-#define EPL_BROADCAST_NODEID                    255
-
 gboolean
 epl_g_int16_equal(gconstpointer v1, gconstpointer v2)
 {
@@ -1703,6 +1673,18 @@ guint
 epl_g_int16_hash(gconstpointer v)
 {
 	return *(const guint16*)v;
+}
+
+gboolean
+epl_g_int8_equal(gconstpointer v1, gconstpointer v2)
+{
+	return *(const guint8*)v1 == *(const guint8*)v2;
+}
+
+guint
+epl_g_int8_hash(gconstpointer v)
+{
+	return *(const guint8*)v;
 }
 
 static wmem_allocator_t *pdo_mapping_scope;
@@ -1776,53 +1758,46 @@ add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping)
 	return len + 1;
 }
 
-static wmem_map_t *epl_profiles;
+static wmem_map_t *epl_profiles_by_device, *epl_profiles_by_nodeid;
 
 static gboolean
 profile_del_cb(wmem_allocator_t *pool _U_, wmem_cb_event_t event _U_, void *_profile)
 {
 	struct profile *profile = (struct profile*)_profile;
-	wmem_map_remove(epl_profiles, &profile->id);
+	if (profile->parent_map)
+		wmem_map_remove(profile->parent_map, profile->data);
 	wmem_destroy_allocator(profile->scope);
 	return FALSE;
 }
 
-struct profile *
-profile_new(wmem_allocator_t *parent_pool, guint16 id)
+static void
+profile_del(struct profile *profile)
+{
+	wmem_unregister_callback(profile->parent_scope, profile->cb_id);
+	profile_del_cb(NULL, WMEM_CB_DESTROY_EVENT, profile);
+}
+
+static struct profile *
+profile_new(wmem_allocator_t *parent_pool)
 {
 	wmem_allocator_t *pool;
-	struct profile *profile, *profile_head;
+	struct profile *profile;
 	
 	pool = wmem_allocator_new(WMEM_ALLOCATOR_SIMPLE);
 	profile = wmem_new0(pool, struct profile);
 	profile->cb_id = wmem_register_callback(parent_pool, profile_del_cb, profile);
 
-	profile->id      = id;
-	profile->scope   = pool;
-	profile->parent_scope   = parent_pool;
-	profile->objects = wmem_map_new(pool, epl_g_int16_hash, epl_g_int16_equal);
-	profile->name = NULL;
-	profile->path = NULL;
-	profile->RPDO = wmem_array_new(pool, sizeof (struct object_mapping));
-	profile->TPDO = wmem_array_new(pool, sizeof (struct object_mapping));
-	profile->next = NULL;
-
-	if ((profile_head = wmem_map_lookup(epl_profiles, &profile->id)))
-	{
-		wmem_map_remove(epl_profiles, &profile_head->id);
-		profile->next = profile_head;
-	}
-
-	wmem_map_insert(epl_profiles, &profile->id, profile);
+	profile->scope        = pool;
+	profile->parent_scope = parent_pool;
+	profile->parent_map   = NULL;
+	profile->objects      = wmem_map_new(pool, epl_g_int16_hash, epl_g_int16_equal);
+	profile->name         = NULL;
+	profile->path         = NULL;
+	profile->RPDO         = wmem_array_new(pool, sizeof (struct object_mapping));
+	profile->TPDO         = wmem_array_new(pool, sizeof (struct object_mapping));
+	profile->next         = NULL;
 
 	return profile;
-}
-
-void
-profile_del(struct profile *profile)
-{
-	wmem_unregister_callback(profile->parent_scope, profile->cb_id);
-	profile_del_cb(NULL, WMEM_CB_DESTROY_EVENT, profile);
 }
 
 struct object *
@@ -2073,8 +2048,8 @@ epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 		convo->TPDO = wmem_array_new(pdo_mapping_scope, sizeof (struct object_mapping));
 		convo->RPDO = wmem_array_new(pdo_mapping_scope, sizeof (struct object_mapping));
 
-		convo->profiles.CN = NULL;
 		convo->profiles.MN = NULL;
+		convo->profiles.CN = (struct profile*)wmem_map_lookup(epl_profiles_by_nodeid, &convo->CN);
 		convo->seq_send = 0xFF;
 
 		conversation_add_proto_data(epan_conversation, proto_epl, (void *)convo);
@@ -2086,7 +2061,7 @@ gboolean
 epl_update_convo_cn_profile(struct epl_convo *convo)
 {
 	struct profile *candidate; /* Best matching profile */
-	if ((candidate = (struct profile*)wmem_map_lookup(epl_profiles, &convo->DeviceType)))
+	if ((candidate = (struct profile*)wmem_map_lookup(epl_profiles_by_device, &convo->DeviceType)))
 	{
 		struct profile *iter = candidate;
 		do {
@@ -2549,7 +2524,7 @@ decode_epl_address (guchar adr)
 	}
 	else
 	{
-		if (( adr < EPL_MN_NODEID) && (adr > EPL_DYNAMIC_NODEID))
+		if (EPL_IS_CN_NODEID(adr))
 		{
 			return addr_str_cn;
 		}
@@ -3180,7 +3155,8 @@ dissect_epl_asnd_ires(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *t
 								convo->DeviceType, val_to_str_const(convo->DeviceType, epl_device_profiles, "Unknown Profile"), additional);
 
 	ti = proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_profile, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-	epl_update_convo_cn_profile(convo);
+	if (!convo->profiles.CN || !convo->profiles.CN->nodeid)
+		epl_update_convo_cn_profile(convo);
 	if (convo->profiles.CN)
 	{
 		if (convo->profiles.CN->name)
@@ -4411,12 +4387,13 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 			proto_item *ti;
 			ti = proto_tree_add_uint_format_value(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, 0, 0, req->idx, "%04X", req->idx);
 			PROTO_ITEM_SET_GENERATED(ti);
-			if (req->info)
+			if (req->info && req->index_name)
 				proto_item_append_text (ti, " (%s)", req->index_name);
 
 			ti = proto_tree_add_uint_format_value(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, 0, 0, req->subindex, "%02X", req->subindex);
 			PROTO_ITEM_SET_GENERATED(ti);
 
+			// FIXME: crashes here
 			if (req->info && req->info->name != req->index_name)
 				proto_item_append_text (ti, " (%s)", req->info->name);
 		}
@@ -4426,16 +4403,72 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 	return offset;
 }
 
+/* User Access Table Checkers */
+static gboolean epl_profile_uat_fld_fileopen_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
+static gboolean epl_uat_fld_cn_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
+static gboolean epl_uat_fld_uint16dec_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
+static gboolean epl_uat_fld_uint32hex_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
 
-static uat_field_t profile_list_uats_flds[] = {
-	UAT_FLD_CSTRING_OTHER(profile_list_uats, DeviceType, "DeviceType", profile_uat_fld_uint16dec_check_cb, "e.g. 401"),
-	UAT_FLD_CSTRING_OTHER(profile_list_uats, VendorId, "VendorId", profile_uat_fld_uint32hex_check_cb, "e.g. DEADBEEF"),
-	UAT_FLD_CSTRING_OTHER(profile_list_uats, ProductCode, "ProductCode", profile_uat_fld_uint32hex_check_cb, "e.g. 8BADFOOD"),
+/* DeviceType:Path User Access Table */
+struct device_profile_uat_assoc {
+	char *path;
 
-	UAT_FLD_FILENAME_OTHER(profile_list_uats, path, "Profile Path", profile_uat_fld_fileopen_check_cb, "Path to the EDS" IF_LIBXML("/XDD/XDC")),
+	guint DeviceType;
+	guint VendorId;
+	guint ProductCode;
+};
+
+static uat_t *device_profile_uat = NULL;
+static struct device_profile_uat_assoc *device_profile_list_uats = NULL;
+static guint ndevice_profile_uat = 0;
+
+static void *device_profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
+static void device_profile_uat_free_cb(void *r);
+static gboolean device_profile_uat_update_record(void *r, char **err);
+static void device_profile_parse_uat(void);
+
+UAT_DEC_CB_DEF(device_profile_list_uats, DeviceType, struct device_profile_uat_assoc)
+UAT_HEX_CB_DEF(device_profile_list_uats, VendorId, struct device_profile_uat_assoc)
+UAT_HEX_CB_DEF(device_profile_list_uats, ProductCode, struct device_profile_uat_assoc)
+UAT_FILENAME_CB_DEF(device_profile_list_uats, path, struct device_profile_uat_assoc)
+
+static uat_field_t device_profile_list_uats_flds[] = {
+	UAT_FLD_CSTRING_OTHER(device_profile_list_uats, DeviceType, "DeviceType", epl_uat_fld_uint16dec_check_cb, "e.g. 401"),
+	UAT_FLD_CSTRING_OTHER(device_profile_list_uats, VendorId, "VendorId", epl_uat_fld_uint32hex_check_cb, "e.g. DEADBEEF"),
+	UAT_FLD_CSTRING_OTHER(device_profile_list_uats, ProductCode, "ProductCode", epl_uat_fld_uint32hex_check_cb, "e.g. 8BADFOOD"),
+
+	UAT_FLD_FILENAME_OTHER(device_profile_list_uats, path, "Profile Path", epl_profile_uat_fld_fileopen_check_cb, "Path to the EDS" IF_LIBXML("/XDD/XDC")),
 
 	UAT_END_FIELDS
 };
+
+/* NodeID:Path User Access Table */
+struct nodeid_profile_uat_assoc {
+	char *path;
+
+	guint nodeid;
+};
+
+static uat_t *nodeid_profile_uat = NULL;
+static struct nodeid_profile_uat_assoc *nodeid_profile_list_uats = NULL;
+static guint nnodeid_profile_uat = 0;
+
+static void *nodeid_profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
+static void nodeid_profile_uat_free_cb(void *r);
+static gboolean nodeid_profile_uat_update_record(void *r, char **err);
+static void nodeid_profile_parse_uat(void);
+
+UAT_DEC_CB_DEF(nodeid_profile_list_uats, nodeid, struct nodeid_profile_uat_assoc)
+UAT_FILENAME_CB_DEF(nodeid_profile_list_uats, path, struct nodeid_profile_uat_assoc)
+
+static uat_field_t nodeid_profile_list_uats_flds[] = {
+	UAT_FLD_CSTRING_OTHER(nodeid_profile_list_uats, nodeid, "Node ID", epl_uat_fld_cn_check_cb, "e.g. 1"),
+
+	UAT_FLD_FILENAME_OTHER(nodeid_profile_list_uats, path, "Profile Path", epl_profile_uat_fld_fileopen_check_cb, "Path to the EDS" IF_LIBXML("/XDD/XDC")),
+
+	UAT_END_FIELDS
+};
+
 
 /* Register the protocol with Wireshark */
 void
@@ -5496,7 +5529,8 @@ proto_register_epl(void)
 	set_address(&convo_mac, AT_NONE, 0, NULL);
 
 	/* init device profiles support */
-	epl_profiles = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
+	epl_profiles_by_device = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
+	epl_profiles_by_nodeid = wmem_map_new(wmem_epan_scope(), epl_g_int8_hash,  epl_g_int8_equal);
 
 #ifdef HAVE_LIBXML
 	xdd_init();
@@ -5504,24 +5538,46 @@ proto_register_epl(void)
 	/* FIXME: where to call xdd_free? */
 	eds_init();
 
-	profile_uat = uat_new("EPL Device Profiles",
-			sizeof (struct profile_uat_assoc),
-			"epl_profiles",                /* filename */
-			TRUE,                          /* from_profile */
-			&profile_list_uats,             /* data_ptr */
-			&nprofile_uat,                  /* numitems_ptr */
-			UAT_AFFECTS_DISSECTION,         /* affects dissection of packets, but not set of named fields */
-			NULL,                           /* Help section (currently a wiki page) */
-			profile_uat_copy_cb,
-			profile_uat_update_record,
-			profile_uat_free_cb,
-			profile_parse_uat,
-			profile_list_uats_flds);
+	device_profile_uat = uat_new("Device-Specific Profiles",
+			sizeof (struct device_profile_uat_assoc),
+			"epl_device_profiles",     /* filename */
+			TRUE,                      /* from_profile */
+			&device_profile_list_uats, /* data_ptr */
+			&ndevice_profile_uat,      /* numitems_ptr */
+			UAT_AFFECTS_DISSECTION,    /* affects dissection of packets, but not set of named fields */
+			NULL,                      /* Help section (currently a wiki page) */
+			device_profile_uat_copy_cb,
+			device_profile_uat_update_record,
+			device_profile_uat_free_cb,
+			device_profile_parse_uat,
+			device_profile_list_uats_flds);
 
-	prefs_register_uat_preference(epl_module, "profile_list",
-			"EPL Device profiles",
+	prefs_register_uat_preference(epl_module, "epl_device_profiles",
+			"Device-Specific Profiles",
 			"Add vendor-provided EDS" IF_LIBXML("/XDD") " profiles here",
-			profile_uat
+			device_profile_uat
+			);
+
+
+	/* TODO: clear nodeid profiles on file change? */
+	nodeid_profile_uat = uat_new("NodeID-Specific Profiles",
+			sizeof (struct nodeid_profile_uat_assoc),
+			"epl_nodeid_profiles",     /* filename */
+			TRUE,                      /* from_profile */
+			&nodeid_profile_list_uats, /* data_ptr */
+			&nnodeid_profile_uat,      /* numitems_ptr */
+			UAT_AFFECTS_DISSECTION,    /* affects dissection of packets, but not set of named fields */
+			NULL,                      /* Help section (currently a wiki page) */
+			nodeid_profile_uat_copy_cb,
+			nodeid_profile_uat_update_record,
+			nodeid_profile_uat_free_cb,
+			nodeid_profile_parse_uat,
+			nodeid_profile_list_uats_flds);
+
+	prefs_register_uat_preference(epl_module, "epl_nodeid_profiles",
+			"Node-Specific Profiles",
+			"Assign vendor-provided EDS" IF_LIBXML("/XDD") " profiles to CN IDs here",
+			nodeid_profile_uat
 			);
 
 	/* tap-registration */
@@ -5543,88 +5599,24 @@ proto_reg_handoff_epl(void)
 	register_cleanup_routine( cleanup_dissector );
 }
 
-static void
-reload_profiles(void *key _U_, void *value, void *user_data _U_)
-{
-	struct profile *head = (struct profile*)value, *curr;
-	while ((curr = head))
-	{
-		head = head->next;
-		profile_del(curr);
-	}
-}
-
-static void
-profile_parse_uat(void)
-{
-	guint i;
-	struct profile *profile = NULL;
-	/*GHashTable *convos;*/
-	wmem_map_foreach(epl_profiles, reload_profiles, NULL);
-
-	/* PDO Mappings can have dangling pointers after a profile change
-	 * so we reset the memory pool. As PDO Mappings are refereneced
-	 * via Conversations, we need to fix up those too. As we reparse
-	 * the file anyway, let's just clear them
-	 */
-
-	if (pdo_mapping_scope) wmem_free_all(pdo_mapping_scope);
-	/*if ((convos = get_conversation_hashtable_no_addr2_or_port2()))*/
-		/*g_hash_table_remove_all(convos);*/
-
-	for (i = 0; i < nprofile_uat; i++)
-	{
-		struct profile_uat_assoc *uat = &(profile_list_uats[i]);
-
-		if (g_str_has_suffix(uat->path, ".eds"))
-			profile = eds_load(wmem_epan_scope(), uat->DeviceType, uat->path);
-#ifdef HAVE_LIBXML
-		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".xdc"))
-			profile = xdd_load(wmem_epan_scope(), uat->DeviceType, uat->path);
-#endif /* HAVE_LIBXML */
-
-		if (profile)
-		{
-			profile->VendorId = uat->VendorId;
-			profile->ProductCode = uat->ProductCode;
-			EPL_INFO("Loading %s\n", profile->path);
-		}
-		else
-		{
-			report_failure("Profile couldn't be parsed.");
-		}
-	}
-}
 
 static gboolean
-profile_uat_update_record(void *_record _U_, char **err _U_)
+epl_uat_fld_cn_check_cb(void *record _U_, const char *str, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err)
 {
+	char *endptr;
+	/* No octals */
+	unsigned long val = strtoul(str, &endptr, g_str_has_prefix(str, "0x") ? 16 : 10);
+	if (!EPL_IS_CN_NODEID(val) || endptr != str + len)
+	{
+		*err = g_strdup("Invalid argument. Expected a Controlled Node ID ([1-239])");
+		return FALSE;
+	}
+
 	return TRUE;
 }
 
-static void
-profile_uat_free_cb(void *_r)
-{
-	struct profile_uat_assoc *r = (struct profile_uat_assoc *)_r;
-	g_free(r->path);
-}
-
-static void*
-profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_)
-{
-	const struct profile_uat_assoc *src = (const struct profile_uat_assoc *)src_;
-	struct profile_uat_assoc       *dst = (struct profile_uat_assoc *)dst_;
-
-	dst->path        = g_strdup(src->path);
-	dst->DeviceType  = src->DeviceType;
-	dst->VendorId    = src->VendorId;
-	dst->ProductCode = src->ProductCode;
-
-	return dst;
-}
-
 static gboolean
-profile_uat_fld_uint16dec_check_cb(void *_record _U_, const char *str, guint len _U_, const void *chk_data _U_, const void *fld_data _U_, char **err)
+epl_uat_fld_uint16dec_check_cb(void *_record _U_, const char *str, guint len _U_, const void *chk_data _U_, const void *fld_data _U_, char **err)
 {
 	char *endptr;
 	unsigned long val = strtoul(str, &endptr, 10);
@@ -5637,7 +5629,7 @@ profile_uat_fld_uint16dec_check_cb(void *_record _U_, const char *str, guint len
 }
 
 static gboolean
-profile_uat_fld_uint32hex_check_cb(void *_record _U_, const char *str, guint len _U_, const void *chk_data _U_, const void *fld_data _U_, char **err)
+epl_uat_fld_uint32hex_check_cb(void *_record _U_, const char *str, guint len _U_, const void *chk_data _U_, const void *fld_data _U_, char **err)
 {
 	char *endptr;
 	unsigned long val = strtoul(str, &endptr, 16);
@@ -5650,7 +5642,7 @@ profile_uat_fld_uint32hex_check_cb(void *_record _U_, const char *str, guint len
 }
 
 static gboolean
-profile_uat_fld_fileopen_check_cb(void *record _U_, const char *path, guint len, const void *chk_data _U_, const void *fld_data _U_, char **err)
+epl_profile_uat_fld_fileopen_check_cb(void *record _U_, const char *path, guint len, const void *chk_data _U_, const void *fld_data _U_, char **err)
 {
 	const char *supported = "Only" IF_LIBXML(" *.xdd, *.xdc and") " *.eds profiles supported.";
 	ws_statb64 st;
@@ -5691,6 +5683,202 @@ profile_uat_fld_fileopen_check_cb(void *record _U_, const char *path, guint len,
 }
 
 
+static void
+reload_profiles(void *key _U_, void *value, void *user_data _U_)
+{
+	struct profile *head = (struct profile*)value, *curr;
+	while ((curr = head))
+	{
+		head = head->next;
+		profile_del(curr);
+	}
+}
+
+static void
+device_profile_parse_uat(void)
+{
+	guint i;
+	struct profile *profile = NULL;
+	wmem_map_foreach(epl_profiles_by_device, reload_profiles, NULL);
+
+	/* PDO Mappings can have dangling pointers after a profile change
+	 * so we reset the memory pool. As PDO Mappings are refereneced
+	 * via Conversations, we need to fix up those too. This seems to be
+	 * done automatically. XXX check if this is still case after refactoring
+	 * in b54c43801112711dcba341f3eb4701678a0e1916 (v2.2.5)
+	 */
+
+	if (pdo_mapping_scope)
+		wmem_free_all(pdo_mapping_scope);
+
+	for (i = 0; i < ndevice_profile_uat; i++)
+	{
+		struct device_profile_uat_assoc *uat = &(device_profile_list_uats[i]);
+
+		if (g_str_has_suffix(uat->path, ".eds")) {
+			profile = profile_new(wmem_epan_scope());
+			if (!eds_load(profile, uat->path))
+			{
+				profile_del(profile);
+				profile = NULL;
+			}
+#ifdef HAVE_LIBXML
+		}
+		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".xdc"))
+		{
+			profile = profile_new(wmem_epan_scope());
+			if (!xdd_load(profile, uat->path))
+			{
+				profile_del(profile);
+				profile = NULL;
+			}
+#endif /* HAVE_LIBXML */
+		}
+
+		if (profile)
+		{
+			struct profile *profile_head;
+			if ((profile_head = wmem_map_lookup(epl_profiles_by_device, &profile->id)))
+			{
+				wmem_map_remove(epl_profiles_by_device, &profile_head->id);
+				profile->next = profile_head;
+			}
+
+			profile->id = uat->DeviceType;
+			profile->data = &profile->id;
+			profile->VendorId = uat->VendorId;
+			profile->ProductCode = uat->ProductCode;
+
+			wmem_map_insert(epl_profiles_by_device, &profile->id, profile);
+			profile->parent_map = epl_profiles_by_device;
+
+			EPL_INFO("Loading %s\n", profile->path);
+		}
+		else
+		{
+			report_failure("Profile '%s' couldn't be parsed.", uat->path);
+		}
+	}
+}
+
+static gboolean
+device_profile_uat_update_record(void *_record _U_, char **err _U_)
+{
+	return TRUE;
+}
+
+static void
+device_profile_uat_free_cb(void *_r)
+{
+	struct device_profile_uat_assoc *r = (struct device_profile_uat_assoc *)_r;
+	g_free(r->path);
+}
+
+static void*
+device_profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_)
+{
+	const struct device_profile_uat_assoc *src = (const struct device_profile_uat_assoc *)src_;
+	struct device_profile_uat_assoc       *dst = (struct device_profile_uat_assoc *)dst_;
+
+	dst->path        = g_strdup(src->path);
+	dst->DeviceType  = src->DeviceType;
+	dst->VendorId    = src->VendorId;
+	dst->ProductCode = src->ProductCode;
+
+	return dst;
+}
+
+static void
+nodeid_profile_parse_uat(void)
+{
+	guint i;
+	struct profile *profile = NULL;
+	wmem_map_foreach(epl_profiles_by_nodeid, reload_profiles, NULL);
+
+	/* PDO Mappings can have dangling pointers after a profile change
+	 * so we reset the memory pool. As PDO Mappings are refereneced
+	 * via Conversations, we need to fix up those too. This seems to be
+	 * done automatically. XXX check if this is still case after refactoring
+	 * in b54c43801112711dcba341f3eb4701678a0e1916 (v2.2.5)
+	 */
+
+	if (pdo_mapping_scope)
+		wmem_free_all(pdo_mapping_scope);
+
+	for (i = 0; i < nnodeid_profile_uat; i++)
+	{
+		struct nodeid_profile_uat_assoc *uat = &(nodeid_profile_list_uats[i]);
+		guint8 nodeid = uat->nodeid;
+
+		if (wmem_map_lookup(epl_profiles_by_nodeid, &nodeid))
+			continue;
+
+		/* XXX Silently skipping might not be the best course of action */
+		if (!EPL_IS_CN_NODEID(uat->nodeid))
+			continue;
+
+		if (g_str_has_suffix(uat->path, ".eds")) {
+			profile = profile_new(wmem_epan_scope());
+			if (!eds_load(profile, uat->path))
+			{
+				profile_del(profile);
+				profile = NULL;
+			}
+#ifdef HAVE_LIBXML
+		}
+		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".xdc"))
+		{
+			profile = profile_new(wmem_epan_scope());
+			if (!xdd_load(profile, uat->path))
+			{
+				profile_del(profile);
+				profile = NULL;
+			}
+#endif /* HAVE_LIBXML */
+		}
+
+		if (profile)
+		{
+			profile->nodeid = nodeid;
+			profile->data = &profile->nodeid;
+
+			wmem_map_insert(epl_profiles_by_nodeid, &profile->nodeid, profile);
+			profile->parent_map = epl_profiles_by_nodeid;
+
+			EPL_INFO("Loading %s\n", profile->path);
+		}
+		else
+		{
+			report_failure("Profile '%s' couldn't be parsed.", uat->path);
+		}
+	}
+}
+
+
+static gboolean
+nodeid_profile_uat_update_record(void *_record _U_, char **err _U_)
+{
+	return TRUE;
+}
+
+static void
+nodeid_profile_uat_free_cb(void *_r)
+{
+	struct nodeid_profile_uat_assoc *r = (struct nodeid_profile_uat_assoc *)_r;
+	g_free(r->path);
+}
+
+static void*
+nodeid_profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_)
+{
+	const struct nodeid_profile_uat_assoc *src = (const struct nodeid_profile_uat_assoc *)src_;
+	struct nodeid_profile_uat_assoc       *dst = (struct nodeid_profile_uat_assoc *)dst_;
+
+	dst->path   = g_strdup(src->path);
+	dst->nodeid = src->nodeid;
+
+	return dst;
+}
 
 /*
  * Editor modelines  -  http://www.wireshark.org/tools/modelines.html

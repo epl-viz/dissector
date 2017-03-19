@@ -42,18 +42,22 @@ const struct dataTypeMap_in *epl_type_to_hf(const char *name);
 
 struct profile {
 	guint16 id;
-    guint32 VendorId;
-    guint32 ProductCode;
+	guint8 nodeid;
+	guint32 VendorId;
+	guint32 ProductCode;
+	
 	wmem_map_t *objects;
 	wmem_allocator_t *scope, *parent_scope;
+	wmem_map_t *parent_map;
+
 	char *name;
 	char *path;
 	void *data;
-    guint cb_id;
-    wmem_array_t *TPDO; /* CN->MN */
-    wmem_array_t *RPDO; /* MN->CN */
+	guint cb_id;
+	wmem_array_t *TPDO; /* CN->MN */
+	wmem_array_t *RPDO; /* MN->CN */
 
-    struct profile *next;
+	struct profile *next;
 };
 
 #define OD_ENTRY_NO_SUBINDICES 7
@@ -76,8 +80,6 @@ struct object {
 };
 
 
-struct profile *profile_new(wmem_allocator_t *parent_pool, guint16 id);
-void profile_del(struct profile *profile);
 struct object *profile_object_add(struct profile *profile, guint16 idx);
 struct object *profile_object_lookup_or_add(struct profile *profile, guint16 idx);
 gboolean profile_object_mapping_add(struct profile *profile, guint16 idx, guint8 subindex, guint64 mapping);
@@ -86,7 +88,7 @@ struct object * object_lookup(struct profile *profile, guint16 idx);
 
 #define CHECK_OVERLAP_ENDS(x1, x2, y1, y2) ((x1) < (y2) && (y1) < (x2))
 #define CHECK_OVERLAP_LENGTH(x, x_len, y, y_len) \
-    CHECK_OVERLAP_ENDS((x), (x) + (x_len), (y), (y) + (y_len))
+	CHECK_OVERLAP_ENDS((x), (x) + (x_len), (y), (y) + (y_len))
 
 #if GLIB_CHECK_VERSION(2, 40, 0)
 #define EPL_INFO(...) g_info(__VA_ARGS__)

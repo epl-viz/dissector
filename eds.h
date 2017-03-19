@@ -29,6 +29,6 @@
 void eds_init(void);
 void eds_free(void);
 
-struct profile *eds_load(wmem_allocator_t*parent_pool, guint16 id, const char *eds_file);
+struct profile *eds_load(struct profile *profile, const char *eds_file);
 
 #endif

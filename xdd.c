@@ -99,20 +99,21 @@ static struct xpath {
 };
 
 struct profile *
-xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
+xdd_load(struct profile *profile, const char *xml_file)
 {
-	struct profile *profile = NULL;
 	xmlXPathContextPtr xpathCtx = NULL;
 	xmlDoc *doc = NULL;
 	struct xpath_namespace *ns = NULL;
 	struct xpath *xpath = NULL;
+	GHashTable *typemap = NULL;
 
 	/* Load XML document */
 	doc = xmlParseFile(xml_file);
 	if (!doc)
 	{
 		g_warning("Error: unable to parse file \"%s\"\n", xml_file);
-		goto fail;
+		profile = NULL;
+		goto cleanup;
 	}
 
 
@@ -121,7 +122,8 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 	if(!xpathCtx)
 	{
 		g_warning("Error: unable to create new XPath context\n");
-		goto fail;
+		profile = NULL;
+		goto cleanup;
 	}
 
 	/* Register namespaces from list */
@@ -130,16 +132,15 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 		if(xmlXPathRegisterNs(xpathCtx, ns->prefix, ns->href) != 0)
 		{
 			g_warning("Error: unable to register NS with prefix=\"%s\" and href=\"%s\"\n", ns->prefix, ns->href);
-			goto fail;
+			profile = NULL;
+			goto cleanup;
 		}
 	}
 
-	/* Allocate profile */
-	profile = profile_new(parent_pool, id);
 	profile->path = wmem_strdup(profile->scope, xml_file);
 
 	/* mapping type ids to &hf_s */
-	profile->data = (GHashTable*)g_hash_table_new_full(epl_g_int16_hash, epl_g_int16_equal, NULL, g_free);
+	profile->data = typemap = (GHashTable*)g_hash_table_new_full(epl_g_int16_hash, epl_g_int16_equal, NULL, g_free);
 
 	/* Evaluate xpath expressions */
 	for (xpath = xpaths; xpath->expr; xpath++)
@@ -149,7 +150,8 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 		{
 			g_warning("Error: unable to evaluate xpath expression \"%s\"\n", xpath->expr);
 			xmlXPathFreeObject(xpathObj);
-			goto fail;
+			profile = NULL;
+			goto cleanup;
 		}
 
 		/* run handler */
@@ -165,23 +167,16 @@ xdd_load(wmem_allocator_t *parent_pool, guint16 id, const char *xml_file)
 	 */
 	profile_object_mappings_update(profile);
 
-	xmlXPathFreeContext(xpathCtx);
-	xmlFreeDoc(doc);
-	return profile;
-
-fail:
-	if (profile && profile->data)
-	{
-		g_hash_table_destroy((GHashTable*)profile->data);
-		profile_del(profile);
-	}
+cleanup:
+	if (typemap)
+		g_hash_table_destroy(typemap);
 
 	if (xpathCtx)
 		xmlXPathFreeContext(xpathCtx);
 	if (doc)
 		xmlFreeDoc(doc);
 
-	return NULL;
+	return profile;
 }
 
 void
