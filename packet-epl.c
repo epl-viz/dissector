@@ -4393,7 +4393,6 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 			ti = proto_tree_add_uint_format_value(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, 0, 0, req->subindex, "%02X", req->subindex);
 			PROTO_ITEM_SET_GENERATED(ti);
 
-			// FIXME: crashes here
 			if (req->info && req->info->name != req->index_name)
 				proto_item_append_text (ti, " (%s)", req->info->name);
 		}
