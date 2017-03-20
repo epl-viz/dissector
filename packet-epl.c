@@ -1930,7 +1930,7 @@ struct epl_convo {
 		guint16 idx;
 		guint8 subindex;
 
-		guint8 sendsequence :6;
+		guint8 sendsequence;
 
 		const char *index_name;
 		struct od_entry *info;
@@ -2043,14 +2043,14 @@ epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 
 	if (convo == NULL)
 	{
-		convo = wmem_new(wmem_file_scope(), struct epl_convo);
+		convo = wmem_new0(wmem_file_scope(), struct epl_convo);
 		convo->CN = cn_addr;
 		convo->TPDO = wmem_array_new(pdo_mapping_scope, sizeof (struct object_mapping));
 		convo->RPDO = wmem_array_new(pdo_mapping_scope, sizeof (struct object_mapping));
 
 		convo->profiles.MN = NULL;
 		convo->profiles.CN = (struct profile*)wmem_map_lookup(epl_profiles_by_nodeid, &convo->CN);
-		convo->seq_send = 0xFF;
+		convo->seq_send = 0x00;
 
 		conversation_add_proto_data(epan_conversation, proto_epl, (void *)convo);
 	}
@@ -3510,7 +3510,7 @@ dissect_epl_sdo_sequence(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t
 	proto_tree_add_uint(sod_seq_tree, hf_epl_asnd_sdo_seq_receive_con,             tvb, offset, 1, seq_recv);
 	offset += 1;
 
-	convo->seq_send = (seq_send = tvb_get_guint8(tvb, offset)) >> 2;
+	convo->seq_send = seq_send = tvb_get_guint8(tvb, offset);
 
 	proto_tree_add_uint(sod_seq_tree, hf_epl_asnd_sdo_seq_send_sequence_number, tvb, offset, 1, seq_send);
 	proto_tree_add_uint(sod_seq_tree, hf_epl_asnd_sdo_seq_send_con, tvb, offset, 1, seq_send);
@@ -4387,7 +4387,7 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 			proto_item *ti;
 			ti = proto_tree_add_uint_format_value(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, 0, 0, req->idx, "%04X", req->idx);
 			PROTO_ITEM_SET_GENERATED(ti);
-			if (req->info && req->index_name)
+			if (req->info)
 				proto_item_append_text (ti, " (%s)", req->index_name);
 
 			ti = proto_tree_add_uint_format_value(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, 0, 0, req->subindex, "%02X", req->subindex);
