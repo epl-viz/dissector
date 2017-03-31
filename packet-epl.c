@@ -1886,28 +1886,6 @@ profile_object_mappings_update(struct profile *profile)
 }
 
 
-static address convo_mac;
-
-static conversation_t *
-find_or_create_conversation_epl(packet_info *pinfo, guint8 cn_addr)
-{
-	conversation_t *convo;
-
-	/* I2C port is also single octet wide */
-	if ((convo = find_conversation(pinfo->num, &convo_mac, &convo_mac, PT_I2C,
-					cn_addr, cn_addr, NO_ADDR_B|NO_PORT_B)))
-	{
-		/* TODO: use conversation template? */
-
-		if (pinfo->num > convo->last_frame)
-			convo->last_frame = pinfo->num;
-	} else {
-		convo = conversation_new(pinfo->num, &convo_mac, &convo_mac, PT_I2C,
-				cn_addr, cn_addr, NO_ADDR2|NO_PORT2);
-	}
-
-	return convo;
-}
 struct epl_convo {
 	guint8 CN;
 
@@ -1923,6 +1901,7 @@ struct epl_convo {
 		struct profile *CN, *MN;
 	} profiles;
 
+	guint32 last_frame;
 	guint8 next_read_req;
 	guint8 seq_send;
 	
@@ -2033,13 +2012,30 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 	return offset + len;
 }
 
-static struct
-epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
+static address convo_mac;
+
+static struct epl_convo *
+epl_get_convo(guint32 framenum, guint8 cn_addr)
 {
 	struct epl_convo *convo;
-	conversation_t * epan_conversation = find_or_create_conversation_epl(pinfo, cn_addr);
+	conversation_t * epan_convo;
+	guint32 last_frame = 0;
 
-	convo = (struct epl_convo*)conversation_get_proto_data(epan_conversation, proto_epl);
+	/* I2C port is also single octet wide */
+	if ((epan_convo = find_conversation(framenum, &convo_mac, &convo_mac, PT_I2C,
+					cn_addr, cn_addr, NO_ADDR_B|NO_PORT_B)))
+	{
+		/* TODO: use conversation template? */
+
+		last_frame = epan_convo->last_frame;
+		if (framenum > epan_convo->last_frame)
+			epan_convo->last_frame = framenum;
+	} else {
+		epan_convo = conversation_new(framenum, &convo_mac, &convo_mac, PT_I2C,
+				cn_addr, cn_addr, NO_ADDR2|NO_PORT2);
+	}
+
+	convo = (struct epl_convo*)conversation_get_proto_data(epan_convo, proto_epl);
 
 	if (convo == NULL)
 	{
@@ -2051,10 +2047,29 @@ epl_convo *epl_get_convo(packet_info *pinfo, guint8 cn_addr)
 		convo->profiles.MN = NULL;
 		convo->profiles.CN = (struct profile*)wmem_map_lookup(epl_profiles_by_nodeid, &convo->CN);
 		convo->seq_send = 0x00;
-
-		conversation_add_proto_data(epan_conversation, proto_epl, (void *)convo);
+		conversation_add_proto_data(epan_convo, proto_epl, (void *)convo);
 	}
+	convo->last_frame = last_frame;
+
 	return convo;
+}
+
+static struct epl_convo *
+epl_convo_cutoff(struct epl_convo *convo)
+{
+	conversation_t *old_epan_convo;
+	guint32 old_last = convo->last_frame;
+	guint32 new_first;
+
+	if (old_last == 0)
+		return convo;
+
+	old_epan_convo = find_conversation(old_last, &convo_mac, &convo_mac, PT_I2C,
+					convo->CN, convo->CN, NO_ADDR_B|NO_PORT_B);
+
+	new_first = old_epan_convo->last_frame;
+	old_epan_convo->last_frame = old_last;
+	return epl_get_convo(new_first, convo->CN);
 }
 
 gboolean
@@ -2368,7 +2383,7 @@ dissect_eplpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean udp
 	cn_addr = src_str  == addr_str_cn ? epl_src
 		: dest_str == addr_str_cn ? epl_dest
 		: 0;
-	convo = epl_get_convo(pinfo, cn_addr);
+	convo = epl_get_convo(pinfo->num, cn_addr);
 
 
 
@@ -3087,6 +3102,9 @@ dissect_epl_asnd_ires(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *t
 	guint32 epl_asnd_identresponse_ipa, epl_asnd_identresponse_snm, epl_asnd_identresponse_gtw;
 	proto_item  *ti_feat, *ti;
 	proto_tree  *epl_feat_tree;
+
+	/* Cut off previous convo and begin a new one */
+	convo = epl_convo_cutoff(convo);
 
 	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_en, tvb, offset, 1, ENC_LITTLE_ENDIAN);
 	proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_ec, tvb, offset, 1, ENC_LITTLE_ENDIAN);
