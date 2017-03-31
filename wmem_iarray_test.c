@@ -44,7 +44,7 @@ int main(void) {
 
 	epl_wmem_print_iarr(iarr);
 
-	epl_wmem_iarray_lock(iarr);
+	epl_wmem_iarray_sort(iarr);
 	puts("------");
 
 	epl_wmem_print_iarr(iarr);

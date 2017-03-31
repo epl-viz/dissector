@@ -96,11 +96,11 @@ epl_wmem_strdup_till(wmem_allocator_t *allocator, const char *str, char ch)
 }
 
 static void
-lock_subindices(void *key _U_, void *value, void *user_data _U_)
+sort_subindices(void *key _U_, void *value, void *user_data _U_)
 {
 	epl_wmem_iarray_t *subindices = ((struct object*)value)->subindices;
 	if (subindices)
-		epl_wmem_iarray_lock(subindices);
+		epl_wmem_iarray_sort(subindices);
 }
 
 static struct dataTypeMap {
@@ -249,7 +249,7 @@ eds_load(struct profile *profile, const char *eds_file)
 	}
 
 	/* Unlike with XDDs, subindices might interleave with others, so let's sort them now */
-	wmem_map_foreach(profile->objects, lock_subindices, NULL);
+	wmem_map_foreach(profile->objects, sort_subindices, NULL);
 
 	/* We don't read object mappings from EDS files */
 	/*   profile_object_mappings_update(profile);   */

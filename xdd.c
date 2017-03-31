@@ -237,7 +237,6 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 				{
 					if (subnode->type == XML_ELEMENT_NODE)
 					{
-						/* FIXME cast */
 						struct dataType *type;
 						const struct dataTypeMap_in *ptr = epl_type_to_hf((char*)subnode->name);
 						if (!ptr)
@@ -358,7 +357,7 @@ populate_objectList(xmlNodeSetPtr nodes, void *_profile)
 						EPL_INFO("Loaded mapping from XDC %s:%s", obj->info.name, subobj.info.name);
 					}
 				}
-				epl_wmem_iarray_lock(obj->subindices);
+				epl_wmem_iarray_sort(obj->subindices);
 			}
 		}
 	}
