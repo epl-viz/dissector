@@ -1637,7 +1637,6 @@ static gint ett_epl_el_entry_type   = -1;
 static gint ett_epl_sdo_entry_type  = -1;
 static gint ett_epl_asnd_nmt_dna    = -1;
 
-static gint ett_epl_pdo                       = -1;
 static gint ett_epl_sdo                       = -1;
 static gint ett_epl_sdo_sequence_layer        = -1;
 static gint ett_epl_sdo_command_layer         = -1;
@@ -1698,6 +1697,7 @@ struct object_mapping {
 
 	guint16 bit_offset;
 	guint16 no_of_bits;
+	int ett;
 	/* info */
 	struct {
 		guint32 first, last;
@@ -1953,7 +1953,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 
 	rem_len = tvb_captured_length_remaining(tvb, offset);
 	payload_tvb = tvb_new_subset_length(tvb, offset, len > rem_len ? rem_len : len);
-	rem_len = tvb_captured_length_remaining(payload_tvb, 0);
+	rem_len = tvb_captured_length_remaining(payload_tvb, 0) * 8;
 
 
 	for (i = 0; i < maps_count; i++)
@@ -1966,11 +1966,11 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		if (!(map->frame.first < pinfo->num && pinfo->num < map->frame.last))
 			continue;
 
-		if (willbe_offset_bits > rem_len * 8)
+		if (willbe_offset_bits > rem_len)
 			break;
 
 		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", map->title);
-		pdo_tree = proto_item_add_subtree(psf_item, ett_epl_pdo);
+		pdo_tree = proto_item_add_subtree(psf_item, map->ett);
 
 		ti = proto_tree_add_uint_format_value(pdo_tree, hf_epl_pdo_index, payload_tvb, 0, 0, map->pdo.idx, "%04X", map->pdo.idx);
 		PROTO_ITEM_SET_GENERATED(ti);
@@ -2007,8 +2007,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 	}
 
 	/* If we don't have enough information, resport to data dissector */
-	rem_len = tvb_captured_length_remaining(payload_tvb, off);
-	if (rem_len)
+	if (tvb_captured_length_remaining(payload_tvb, off))
 	{
 		return dissect_epl_payload_fallback(epl_tree, payload_tvb, pinfo, off, rem_len, msgType);
 	}
@@ -2895,7 +2894,7 @@ dissect_epl_asnd(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 			reported_len = tvb_reported_length_remaining(tvb, offset);
 
 			next_tvb = tvb_new_subset(tvb, offset, size, reported_len);
-			/* Manufacturer specific 0x00 for ASND services */
+			/* Manufacturer specific entries for ASND services */
 			if ( svid >= 0xA0 && svid < 0xFF )
 			{
 				if (! dissector_try_uint(epl_asnd_dissector_table, svid, next_tvb, pinfo,
@@ -3972,6 +3971,7 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	proto_tree *psf_tree;
 	struct object_mapping map = {0};
 	struct object *mapping_obj;
+	int *ett;
 	struct subobject *mapping_subobj;
 	gboolean nosub = FALSE;
 
@@ -4011,11 +4011,6 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 		}
 	}
 
-	if (nosub)
-		map.title = g_strdup_printf("PDO - %04X", map.pdo.idx);
-	else
-		map.title = g_strdup_printf("PDO - %04X:%02X", map.pdo.idx, map.pdo.subindex);
-
 	map.bit_offset = tvb_get_letohs(tvb, offset);
 	proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_offset, tvb, offset, 2, map.bit_offset,"Offset: 0x%04X", map.bit_offset);
 	offset += 2;
@@ -4025,7 +4020,21 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	proto_item_append_text(psf_item, " bits");
 	offset += 2;
 
-	/* maybe Digital.Output_00h_AU8.DigitalOutput: 128 (0x80) ? */
+
+	/* TODO: Better representation?
+	 * maybe Digital.Output_00h_AU8.DigitalOutput: 128 (0x80) ? */
+	if (nosub)
+		map.title = g_strdup_printf("PDO - %04X", map.pdo.idx);
+	else
+		map.title = g_strdup_printf("PDO - %04X:%02X", map.pdo.idx, map.pdo.subindex);
+
+
+	map.ett = -1;
+	ett = &map.ett;
+	/* We leak an ett entry every time we destruct a mapping
+	 * Not sure what to do about that
+	 */
+	proto_register_subtree_array(&ett, 1);
 
 	add_object_mapping(mappings, &map);
 
@@ -5478,7 +5487,6 @@ proto_register_epl(void)
 		&ett_epl_sdo,
 		&ett_epl_sdo_data,
 		&ett_epl_asnd_sdo_cmd_data_mapping,
-		&ett_epl_pdo,
 		&ett_epl_sdo_sequence_layer,
 		&ett_epl_sdo_command_layer,
 		&ett_epl_soa_sync,
