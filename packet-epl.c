@@ -1695,9 +1695,9 @@ struct object_mapping {
 		guint8 subindex;
 	} pdo,   /* The PDO to be mapped */
 	  param; /* The ObjectMapping OD entry that mapped it */
-	/* in bits */
-	guint16 offset;
-	guint16 len;
+
+	guint16 bit_offset;
+	guint16 no_of_bits;
 	/* info */
 	struct {
 		guint32 first, last;
@@ -1719,8 +1719,8 @@ object_mapping_cmp(const void *_a, const void *_b)
 	const struct object_mapping *a = (const struct object_mapping*)_a;
 	const struct object_mapping *b = (const struct object_mapping*)_b;
 
-	if (a->offset < b->offset) return -1;
-	if (a->offset > b->offset) return +1;
+	if (a->bit_offset < b->bit_offset) return -1;
+	if (a->bit_offset > b->bit_offset) return +1;
 	return 0;
 }
 gboolean
@@ -1746,7 +1746,7 @@ add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping)
 			return len;
 
 		if (old[i].frame.first < mapping->frame.first
-		  && (CHECK_OVERLAP_LENGTH(old[i].offset, old[i].len, mapping->offset, mapping->len)
+		  && (CHECK_OVERLAP_LENGTH(old[i].bit_offset, old[i].no_of_bits, mapping->bit_offset, mapping->no_of_bits)
 		  || (old[i].param.idx == mapping->param.idx && old[i].param.subindex == mapping->param.subindex
 		  && CHECK_OVERLAP_ENDS(old[i].frame.first, old[i].frame.last, mapping->frame.first, mapping->frame.last))))
 		{
@@ -1943,7 +1943,6 @@ convo_read_req_set(struct epl_convo *convo, guint8 SendSequenceNumber)
 static int
 call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint offset, guint len, guint8 msgType)
 {
-	/* TODO: What about non 8-bit-multiple-data */
 	wmem_array_t *mapping = msgType == EPL_PRES ? convo->TPDO : convo->RPDO;
 	tvbuff_t *payload_tvb;
 	guint rem_len;
@@ -1962,7 +1961,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		proto_tree *pdo_tree;
 		proto_item *psf_item, *ti;
 		struct object_mapping *map = &mappings[i];
-		guint willbe_offset_bits = map->offset + map->len;
+		guint willbe_offset_bits = map->bit_offset + map->no_of_bits;
 
 		if (!(map->frame.first < pinfo->num && pinfo->num < map->frame.last))
 			continue;
@@ -1988,17 +1987,20 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		{
 			ti = proto_tree_add_string_format(pdo_tree, hf_epl_asnd_identresponse_profile_path, tvb, 0, 0,
 					"", "Mapping set by %04X:%02X, Life time: Frame #%u-#%u, Offset: 0x%04x, Length %u bits",
-					map->param.idx, map->param.subindex, map->frame.first, map->frame.last, map->offset, map->len
+					map->param.idx, map->param.subindex, map->frame.first, map->frame.last, map->bit_offset, map->no_of_bits
 					);
 			PROTO_ITEM_SET_GENERATED(ti);
 		}
 
 		if (map->info && map->info->type)
 		{
-			proto_tree_add_item(pdo_tree, *map->info->type->hf, payload_tvb,
-					map->offset / 8, map->len / 8, map->info->type->encoding);
+			proto_tree_add_item(
+			pdo_tree, *map->info->type->hf,
+			tvb_new_octet_aligned(payload_tvb, map->bit_offset, map->no_of_bits),
+			0, map->no_of_bits / 8, map->info->type->encoding
+			);
 		} else { 
-			dissect_epl_payload_fallback(pdo_tree, payload_tvb, pinfo, map->offset / 8, map->len / 8, msgType); 
+			dissect_epl_payload_fallback(pdo_tree, payload_tvb, pinfo, map->bit_offset / 8, map->no_of_bits / 8, msgType); 
 		}
 
 		off = willbe_offset_bits / 8;
@@ -2893,7 +2895,7 @@ dissect_epl_asnd(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 			reported_len = tvb_reported_length_remaining(tvb, offset);
 
 			next_tvb = tvb_new_subset(tvb, offset, size, reported_len);
-			/* Manufacturer specific entries for ASND services */
+			/* Manufacturer specific 0x00 for ASND services */
 			if ( svid >= 0xA0 && svid < 0xFF )
 			{
 				if (! dissector_try_uint(epl_asnd_dissector_table, svid, next_tvb, pinfo,
@@ -3709,7 +3711,8 @@ gint
 dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, guint8 segmented, gboolean response, guint16 segment_size)
 {
 	gint size, payload_length = 0;
-	guint16 idx = 0x00, param_index = 0x00, nosub = 0x00, sod_index = 0x00, error = 0xFF, entries = 0x00, sub_val = 0x00;
+	guint16 idx = 0x00, param_index = 0x00, sod_index = 0x00, error = 0xFF, sub_val = 0x00;
+	gboolean nosub = FALSE;
 	guint8 subindex = 0x00, param_subindex = 0x00;
 	guint32 fragmentId = 0;
 	guint32 frame = 0;
@@ -3741,30 +3744,38 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 				index_str = rval_to_str_const(idx, sod_cmd_str, "unknown");
 				/* get index string value */
 				sod_index = str_to_val(index_str, sod_cmd_str_val, error);
-			}
 
-			/* get subindex string */
-			sub_index_str = val_to_str_ext_const(idx, &sod_cmd_no_sub, "unknown");
-			/* get subindex string value*/
-			nosub = str_to_val(sub_index_str, sod_cmd_str_no_sub,error);
+				/* get subindex string */
+				sub_index_str = val_to_str_ext_const(idx, &sod_cmd_no_sub, "unknown");
+				/* get subindex string value */
+				nosub = str_to_val(sub_index_str, sod_cmd_str_no_sub, 0xFF) != 0xFF;
+			}
 			offset += 2;
 
 			/* get subindex offset */
 			param_subindex = subindex = tvb_get_guint8(tvb, offset);
 			subobj = subobject_lookup(obj, subindex);
 
+
 			/* get subindex string */
 			sub_str = val_to_str_ext_const(idx, &sod_cmd_sub_str, "unknown");
 			/* get string value */
-			sub_val = str_to_val(sub_str, sod_cmd_sub_str_val,error);
+			sub_val = str_to_val(sub_str, sod_cmd_sub_str_val, error);
 
 			col_append_fstr(pinfo->cinfo, COL_INFO, "%s[%d]: (0x%04X/%d)",
 							val_to_str_ext(EPL_ASND_SDO_COMMAND_WRITE_BY_INDEX, &epl_sdo_asnd_commands_short_ext, "Command(%02X)"),
 							segment_size, idx, subindex);
 
-			if(obj || sod_index == error)
+			if(obj)
 			{
-				const char *name = obj ? obj->info.name :val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined");
+				const char *name = obj->info.name;
+				proto_item_append_text(psf_item, " (%s)", name);
+				col_append_fstr(pinfo->cinfo, COL_INFO, " (%s", name);
+				nosub = obj->info.kind == OD_ENTRY_NO_SUBINDICES;
+			}
+			else if (sod_index == error)
+			{
+				const char *name = val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined");
 				proto_item_append_text(psf_item, " (%s)", name);
 				col_append_fstr(pinfo->cinfo, COL_INFO, " (%s", name);
 			}
@@ -3823,12 +3834,11 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 				col_append_fstr(pinfo->cinfo, COL_INFO, "/ObjectMapping)");
 			}
 			/* no subindex */
-			else if(nosub != error)
+			else if(nosub)
 			{
 				col_append_fstr(pinfo->cinfo, COL_INFO, ")");
 			}
-			/* if the subindex has the value 0x00 */
-			else if(subindex == entries)
+			else if(subindex == 0x00)
 			{
 				psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, offset, 1, ENC_LITTLE_ENDIAN);
 				proto_item_append_text(psf_item, " (NumberOfEntries)");
@@ -3930,7 +3940,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 
 
 		/* if the frame is a PDO Mapping and the subindex is bigger than 0x00 */
-		if((idx == EPL_SOD_PDO_TX_MAPP && subindex > entries) || (idx == EPL_SOD_PDO_RX_MAPP && subindex > entries))
+		if((idx == EPL_SOD_PDO_TX_MAPP && subindex > 0x00) || (idx == EPL_SOD_PDO_RX_MAPP && subindex > 0x00))
 		{
 			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
 			offset = dissect_object_mapping(convo->profiles.CN, mappings, epl_tree, tvb, pinfo->num, offset, idx, subindex);
@@ -3961,6 +3971,10 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	proto_item *ti_obj, *ti_subobj, *psf_item;
 	proto_tree *psf_tree;
 	struct object_mapping map = {0};
+	struct object *mapping_obj;
+	struct subobject *mapping_subobj;
+	gboolean nosub = FALSE;
+
 	map.param.idx = idx;
 	map.param.subindex = subindex;
 	map.frame.first = framenum;
@@ -3978,40 +3992,39 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	offset += 2;
 
 	/* look up index in registered profiles */
+	if ((mapping_obj = object_lookup(profile, map.pdo.idx)))
 	{
-		struct object *mapping_obj;
-		struct subobject *mapping_subobj;
-		mapping_obj = object_lookup(profile, map.pdo.idx);
-		if (mapping_obj)
-		{
-			map.info = &mapping_obj->info;
-			map.index_name = map.info->name;
-			proto_item_append_text (ti_obj, " (%s)", map.info->name);
+		if (!map.pdo.subindex && mapping_obj->info.kind == OD_ENTRY_NO_SUBINDICES)
+			nosub = TRUE;
+	
+		map.info = &mapping_obj->info;
+		map.index_name = map.info->name;
+		proto_item_append_text (ti_obj, " (%s)", map.info->name);
 
-			mapping_subobj = subobject_lookup(mapping_obj, map.pdo.subindex);
-			if (mapping_subobj)
-			{
-				map.info = &mapping_subobj->info;
-				proto_item_append_text (ti_subobj, " (%s)", map.info->name);
-			}
+		mapping_subobj = subobject_lookup(mapping_obj, map.pdo.subindex);
+		if (mapping_subobj)
+		{
+			map.info = &mapping_subobj->info;
+			proto_item_append_text (ti_subobj, " (%s)", map.info->name);
+		} else {
+			PROTO_ITEM_SET_HIDDEN(ti_subobj);
 		}
 	}
 
+	if (nosub)
+		map.title = g_strdup_printf("PDO - %04X", map.pdo.idx);
+	else
+		map.title = g_strdup_printf("PDO - %04X:%02X", map.pdo.idx, map.pdo.subindex);
 
-	map.offset = tvb_get_letohs(tvb, offset);
-	proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_offset, tvb, offset, 2, map.offset,"Offset: 0x%04X", map.offset);
+	map.bit_offset = tvb_get_letohs(tvb, offset);
+	proto_tree_add_uint_format(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_offset, tvb, offset, 2, map.bit_offset,"Offset: 0x%04X", map.bit_offset);
 	offset += 2;
 
-	map.len = tvb_get_guint8(tvb, offset);
+	map.no_of_bits = tvb_get_guint8(tvb, offset);
 	psf_item = proto_tree_add_item(psf_tree, hf_epl_asnd_sdo_cmd_data_mapping_length, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 	proto_item_append_text(psf_item, " bits");
 	offset += 2;
 
-	if (map.info->name == map.index_name)
-		map.title = g_strdup_printf("PDO - %04X", map.pdo.idx);
-	else
-		map.title = g_strdup_printf("PDO - %04X:%02X", map.pdo.idx, map.pdo.subindex);
-		
 	/* maybe Digital.Output_00h_AU8.DigitalOutput: 128 (0x80) ? */
 
 	add_object_mapping(mappings, &map);
@@ -4024,7 +4037,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 {
 	gint dataoffset;
 	guint8 subindex = 0x00,  padding = 0x00;
-	guint16 idx = 0x00, sod_index = 0x00, nosub = 0x00 ,error = 0xFF, entries = 0x00, sub_val = 0x00;
+	guint16 idx = 0x00, sod_index = 0x00, nosub = 0x00 ,error = 0xFF, sub_val = 0x00;
 	guint32 size, offsetincrement, datalength, remlength, objectcnt;
 	gboolean lastentry = FALSE;
 	const gchar *index_str, *sub_str, *sub_index_str;
@@ -4120,11 +4133,12 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 					index_str = rval_to_str_const(idx, sod_cmd_str, "unknown");
 					/* get index string value */
 					sod_index = str_to_val(index_str, sod_cmd_str_val, error);
+
+					/* get subindex string */
+					sub_index_str = val_to_str_ext_const(idx, &sod_cmd_no_sub, "unknown");
+					/* get subindex string value*/
+					nosub = str_to_val(sub_index_str, sod_cmd_str_no_sub,error);
 				}
-				/* get subindex string */
-				sub_index_str = val_to_str_ext_const(idx, &sod_cmd_no_sub, "unknown");
-				/* get subindex string value*/
-				nosub = str_to_val(sub_index_str, sod_cmd_str_no_sub,error);
 
 				if(obj || sod_index == error)
 				{
@@ -4200,7 +4214,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 					proto_item_append_text(psf_item, " (ObjectMapping)");
 				}
 				/* if the subindex has the value 0x00 */
-				else if(subindex == entries)
+				else if(subindex == 0x00)
 				{
 					psf_item = proto_tree_add_item(psf_od_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, dataoffset, 1, ENC_LITTLE_ENDIAN);
 					proto_item_append_text(psf_item, " (NumberOfEntries)");
@@ -4215,7 +4229,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 				/* info text */
 				if (objectcnt < 8)
 				{
-					if (nosub != error)
+					if (nosub)
 						/* no subindex */
 						col_append_fstr(pinfo->cinfo, COL_INFO, ")");
 					else
@@ -4234,7 +4248,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 			PROTO_ITEM_SET_GENERATED(psf_item);
 
 			/* if the frame is a PDO Mapping and the subindex is bigger than 0x00 */
-			if((idx == EPL_SOD_PDO_TX_MAPP && subindex > entries) ||(idx == EPL_SOD_PDO_RX_MAPP && subindex > entries))
+			if((idx == EPL_SOD_PDO_TX_MAPP && subindex > 0x00) ||(idx == EPL_SOD_PDO_RX_MAPP && subindex > 0x00))
 			{
 				wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
 
