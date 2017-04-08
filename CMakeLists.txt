@@ -24,23 +24,20 @@ include(WiresharkPlugin)
 # Plugin name and version info (major minor micro extra)
 set_module_info(epl_plus_xdd 0 0 3 0)
 
-## XXX Remove when libxml2 is added as optional dependency to Wireshark ##
-set(HAVE_LIBXML 1)
-add_definitions(-DHAVE_LIBXML=1)
-##########################################################################
-
 
 set(DISSECTOR_SRC
 	packet-epl.c
 	eds.c
 	wmem_iarray.c
 )
-if(HAVE_LIBXML)
+if(HAVE_LIBXML2)
 	set(DISSECTOR_SRC
 		xdd.c
 		${DISSECTOR_SRC}
 	)
-endif(HAVE_LIBXML)
+endif(HAVE_LIBXML2)
+
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
 
 set(PLUGIN_FILES
 	plugin.c
@@ -59,13 +56,10 @@ if(WERROR_COMMON_FLAGS)
   )
 endif(WERROR_COMMON_FLAGS)
 
-if(HAVE_LIBXML)
-	set(LibXml2_ROOT ${CMAKE_CURRENT_LIST_DIR})
-	find_package(LibXml2 REQUIRED )
-
+if(HAVE_LIBXML2)
 	include_directories(${LIBXML2_INCLUDE_DIR})
 	set(LIBS ${LIBS} ${LIBXML2_LIBRARIES})
-endif(HAVE_LIBXML)
+endif(HAVE_LIBXML2)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 

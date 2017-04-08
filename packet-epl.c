@@ -31,10 +31,11 @@
  *                     Institute for Anthropomatics and Robotics (IAR)
  *                     Intelligent Process Control and Robotics (IPR)
  *
- *                     - Ahmad Fatoum <ahmad@a3f.at>
+ *                     - Ahmad Fatoum <ahmad[AT]a3f.at>
  *                       - Converted into plugin for easier development
  *                       - ObjectMappings now used for dissecting PDOs
  *                       - XDD/EDS files can be read for name/type information
+ *
  * A dissector for:
  * Wireshark - Network traffic analyzer
  * By Gerald Combs <gerald@wireshark.org>
@@ -58,12 +59,12 @@
 #include "config.h"
 
 #include "packet-epl.h"
-#ifdef HAVE_LIBXML
-#include "xdd.h"
-#define IF_LIBXML(x) x
-#else /* !HAVE_LIBXML */
-#define IF_LIBXML(x)
-#endif /* !HAVE_LIBXML */
+#ifdef HAVE_LIBXML2
+	#include "xdd.h"
+	#define IF_LIBXML(x) x
+#else /* !HAVE_LIBXML2 */
+	#define IF_LIBXML(x)
+#endif /* !HAVE_LIBXML2 */
 #include "eds.h"
 #include "wmem_iarray.h"
 
@@ -5537,10 +5538,10 @@ proto_register_epl(void)
 	prefs_register_bool_preference(epl_module, "show_pdo_meta_info", "Show life times and origin PDO Tx/Rx params for PDO entries",
 		"For analysis purposes one might want to see how long the current mapping has been active for and what OD write caused it", &show_pdo_meta_info);
 
-#ifdef HAVE_LIBXML
+#ifdef HAVE_LIBXML2
 	prefs_register_bool_preference(epl_module, "read_xdc_for_mappings", "Read ObjectMappings from XDC",
 		"If you want to parse the defaultValue (XDD) and actualValue (XDC) attributes for ObjectMappings in order to detect default PDO mappings, which may not be exchanged over SDO ", &read_xdc_for_mappings);
-#endif /* HAVE_LIBXML */
+#endif /* HAVE_LIBXML2 */
 
 	/* populate static address for convo */
 	set_address(&convo_mac, AT_NONE, 0, NULL);
@@ -5549,9 +5550,9 @@ proto_register_epl(void)
 	epl_profiles_by_device = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
 	epl_profiles_by_nodeid = wmem_map_new(wmem_epan_scope(), epl_g_int8_hash,  epl_g_int8_equal);
 
-#ifdef HAVE_LIBXML
+#ifdef HAVE_LIBXML2
 	xdd_init();
-#endif /* HAVE_LIBXML */
+#endif /* HAVE_LIBXML2 */
 	/* FIXME: where to call xdd_free? */
 	eds_init();
 
@@ -5686,13 +5687,13 @@ epl_profile_uat_fld_fileopen_check_cb(void *record _U_, const char *path, guint 
 	
 	if (g_str_has_suffix(path, ".xdd") || g_str_has_suffix(path, ".xdc"))
 	{
-#ifdef HAVE_LIBXML
+#ifdef HAVE_LIBXML2
 		*err = NULL;
 		return TRUE;
-#else /* !HAVE_LIBXML */
+#else /* !HAVE_LIBXML2 */
 		*err = g_strdup_printf("*.xdd and *.xdc support not compiled in. %s", supported);
 		return FALSE;
-#endif /* !HAVE_LIBXML */
+#endif /* !HAVE_LIBXML2 */
 	}
 
 	*err = g_strdup(supported);
@@ -5739,7 +5740,7 @@ device_profile_parse_uat(void)
 				profile_del(profile);
 				profile = NULL;
 			}
-#ifdef HAVE_LIBXML
+#ifdef HAVE_LIBXML2
 		}
 		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".xdc"))
 		{
@@ -5749,7 +5750,7 @@ device_profile_parse_uat(void)
 				profile_del(profile);
 				profile = NULL;
 			}
-#endif /* HAVE_LIBXML */
+#endif /* HAVE_LIBXML2 */
 		}
 
 		if (profile)
@@ -5841,7 +5842,7 @@ nodeid_profile_parse_uat(void)
 				profile_del(profile);
 				profile = NULL;
 			}
-#ifdef HAVE_LIBXML
+#ifdef HAVE_LIBXML2
 		}
 		else if (g_str_has_suffix(uat->path, ".xdd") || g_str_has_suffix(uat->path, ".xdc"))
 		{
@@ -5851,7 +5852,7 @@ nodeid_profile_parse_uat(void)
 				profile_del(profile);
 				profile = NULL;
 			}
-#endif /* HAVE_LIBXML */
+#endif /* HAVE_LIBXML2 */
 		}
 
 		if (profile)
