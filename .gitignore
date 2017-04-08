@@ -9,3 +9,5 @@ test
 FALSE
 .ycm_extra_conf.py*
 *.o
+Makefile
+Makefile.in
