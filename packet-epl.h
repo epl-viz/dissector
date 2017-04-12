@@ -37,8 +37,8 @@
 gboolean epl_g_int16_equal(gconstpointer v1, gconstpointer v2);
 guint epl_g_int16_hash(gconstpointer v);
 
-struct dataTypeMap_in;
-const struct dataTypeMap_in *epl_type_to_hf(const char *name);
+struct epl_datatype;
+const struct epl_datatype *epl_type_to_hf(const char *name);
 
 struct profile {
 	guint16 id;
@@ -65,7 +65,7 @@ struct od_entry {
 	guint16 idx;
 	guint8 kind; /* object type, is it aggregate or plain and so, FIXME needs better name */
 	char name[64];
-	const struct dataTypeMap_in *type;
+	const struct epl_datatype *type;
 	guint64 value;
 };
 

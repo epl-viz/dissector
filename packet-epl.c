@@ -30,6 +30,7 @@
  * Copyright (c) 2017: Karlsruhe Institute of Technology (KIT)
  *                     Institute for Anthropomatics and Robotics (IAR)
  *                     Intelligent Process Control and Robotics (IPR)
+ *                     http://rob.ipr.kit.edu/
  *
  *                     - Ahmad Fatoum <ahmad[AT]a3f.at>
  *                       - Converted into plugin for easier development
@@ -1243,8 +1244,7 @@ static const gchar* addr_str_res = " (reserved)";
 
 struct epl_convo;
 
-static gint dissect_epl_payload_fallback(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, gint len, guint8 msgType );
-
+static gint dissect_epl_payload(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, gint len, const struct epl_datatype *type, guint8 msgType);
 static gint dissect_epl_soc(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_preq(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset);
 static gint dissect_epl_pres(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint8 epl_src, gint offset);
@@ -1530,56 +1530,57 @@ static gint hf_epl_od_unsigned[EPL_PDO_TYPE_COUNT]
 #define SIZE_TO_UNSIGNED_HF(size) ((0 < (size) && (size) <= EPL_PDO_TYPE_COUNT) \
 		? &hf_epl_od_unsigned[(size) - 1] : NULL)
 
-static const struct dataTypeMap_in {
+static const struct epl_datatype {
 	const char *name;
 	gint *hf;
 	guint encoding;
-} dataTypeMap_in[] = {
-	{ "Boolean",        &hf_epl_od_boolean,   ENC_LITTLE_ENDIAN },
+	guint8 len;
+} epl_datatype[] = {
+	{ "Boolean",        &hf_epl_od_boolean,   ENC_LITTLE_ENDIAN , 1},
 	/* integer types */
-	{ "Integer8",       &hf_epl_od_integer8 , ENC_LITTLE_ENDIAN },
-	{ "Integer16",      &hf_epl_od_integer16, ENC_LITTLE_ENDIAN },
-	{ "Integer24",      &hf_epl_od_integer24, ENC_LITTLE_ENDIAN },
-	{ "Integer32",      &hf_epl_od_integer32, ENC_LITTLE_ENDIAN },
-	{ "Integer40",      &hf_epl_od_integer40, ENC_LITTLE_ENDIAN },
-	{ "Integer48",      &hf_epl_od_integer48, ENC_LITTLE_ENDIAN },
-	{ "Integer56",      &hf_epl_od_integer56, ENC_LITTLE_ENDIAN },
-	{ "Integer64",      &hf_epl_od_integer64, ENC_LITTLE_ENDIAN },
+	{ "Integer8",       &hf_epl_od_integer8 , ENC_LITTLE_ENDIAN, 1},
+	{ "Integer16",      &hf_epl_od_integer16, ENC_LITTLE_ENDIAN, 2},
+	{ "Integer24",      &hf_epl_od_integer24, ENC_LITTLE_ENDIAN, 3},
+	{ "Integer32",      &hf_epl_od_integer32, ENC_LITTLE_ENDIAN, 4},
+	{ "Integer40",      &hf_epl_od_integer40, ENC_LITTLE_ENDIAN, 5},
+	{ "Integer48",      &hf_epl_od_integer48, ENC_LITTLE_ENDIAN, 6},
+	{ "Integer56",      &hf_epl_od_integer56, ENC_LITTLE_ENDIAN, 7},
+	{ "Integer64",      &hf_epl_od_integer64, ENC_LITTLE_ENDIAN, 8},
 
-	{ "Unsigned8",  SIZE_TO_UNSIGNED_HF(1), ENC_LITTLE_ENDIAN },
-	{ "Unsigned16", SIZE_TO_UNSIGNED_HF(2), ENC_LITTLE_ENDIAN },
-	{ "Unsigned24", SIZE_TO_UNSIGNED_HF(3), ENC_LITTLE_ENDIAN },
-	{ "Unsigned32", SIZE_TO_UNSIGNED_HF(4), ENC_LITTLE_ENDIAN },
-	{ "Unsigned40", SIZE_TO_UNSIGNED_HF(5), ENC_LITTLE_ENDIAN },
-	{ "Unsigned48", SIZE_TO_UNSIGNED_HF(6), ENC_LITTLE_ENDIAN },
-	{ "Unsigned56", SIZE_TO_UNSIGNED_HF(7), ENC_LITTLE_ENDIAN },
-	{ "Unsigned64", SIZE_TO_UNSIGNED_HF(8), ENC_LITTLE_ENDIAN },
+	{ "Unsigned8",  SIZE_TO_UNSIGNED_HF(1), ENC_LITTLE_ENDIAN, 1},
+	{ "Unsigned16", SIZE_TO_UNSIGNED_HF(2), ENC_LITTLE_ENDIAN, 2},
+	{ "Unsigned24", SIZE_TO_UNSIGNED_HF(3), ENC_LITTLE_ENDIAN, 3},
+	{ "Unsigned32", SIZE_TO_UNSIGNED_HF(4), ENC_LITTLE_ENDIAN, 4},
+	{ "Unsigned40", SIZE_TO_UNSIGNED_HF(5), ENC_LITTLE_ENDIAN, 5},
+	{ "Unsigned48", SIZE_TO_UNSIGNED_HF(6), ENC_LITTLE_ENDIAN, 6},
+	{ "Unsigned56", SIZE_TO_UNSIGNED_HF(7), ENC_LITTLE_ENDIAN, 7},
+	{ "Unsigned64", SIZE_TO_UNSIGNED_HF(8), ENC_LITTLE_ENDIAN, 8},
 
 	/* non-integer types */
 
 
-	{ "Real32",         &hf_epl_od_real32,    ENC_LITTLE_ENDIAN },
-	{ "Real64",         &hf_epl_od_real64,    ENC_LITTLE_ENDIAN },
-	{ "Visible_String", &hf_epl_od_visible_string,  ENC_ASCII },
-	{ "Octet_String",   &hf_epl_od_octet_string,    ENC_NA },
-	{ "Unicode_String", &hf_epl_od_unicode_string,  ENC_UCS_2 },
-	/*{ "Time_of_Day",    &hf_epl_od_time_of_day,     ENC_NA },*/
+	{ "Real32",         &hf_epl_od_real32,    ENC_LITTLE_ENDIAN, 4},
+	{ "Real64",         &hf_epl_od_real64,    ENC_LITTLE_ENDIAN, 8},
+	{ "Visible_String", &hf_epl_od_visible_string,  ENC_ASCII, 0},
+	{ "Octet_String",   &hf_epl_od_octet_string,    ENC_NA, 0},
+	{ "Unicode_String", &hf_epl_od_unicode_string,  ENC_UCS_2, 0},
+	/*{ "Time_of_Day",    &hf_epl_od_time_of_day,     ENC_NA},*/
 	/*{ "Time_Diff",      &hf_epl_od_time_difference, ENC_NA },*/
-	{ "NETTIME",        &hf_epl_od_nettime, ENC_TIME_TIMESPEC },
+	{ "NETTIME",        &hf_epl_od_nettime, ENC_TIME_TIMESPEC, 8},
 
 	/*{ "Domain",         &hf_epl_od_domain, ENC_NA },*/
-	{ "MAC_ADDRESS",    &hf_epl_od_mac,    ENC_BIG_ENDIAN },
-	{ "IP_ADDRESS",     &hf_epl_od_ipv4,   ENC_BIG_ENDIAN },
+	{ "MAC_ADDRESS",    &hf_epl_od_mac,    ENC_BIG_ENDIAN, 6},
+	{ "IP_ADDRESS",     &hf_epl_od_ipv4,   ENC_BIG_ENDIAN, 4},
 
 	{ NULL, NULL }
 };
 
 
 const struct
-dataTypeMap_in *epl_type_to_hf(const char *name)
+epl_datatype *epl_type_to_hf(const char *name)
 {
-	const struct dataTypeMap_in *entry;
-	for (entry = dataTypeMap_in; entry->name; entry++)
+	const struct epl_datatype *entry;
+	for (entry = epl_datatype; entry->name; entry++)
 	{
 		if (strcmp(name, entry->name) == 0)
 			return entry;
@@ -1945,7 +1946,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 {
 	wmem_array_t *mapping = msgType == EPL_PRES ? convo->TPDO : convo->RPDO;
 	tvbuff_t *payload_tvb;
-	guint rem_len;
+	guint rem_len, rem_len_bits;
 	guint i, maps_count;
 	guint off = 0;
 
@@ -1953,7 +1954,8 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 
 	rem_len = tvb_captured_length_remaining(tvb, offset);
 	payload_tvb = tvb_new_subset_length(tvb, offset, len > rem_len ? rem_len : len);
-	rem_len = tvb_captured_length_remaining(payload_tvb, 0) * 8;
+	rem_len = tvb_captured_length_remaining(payload_tvb, 0);
+	rem_len_bits = rem_len * 8;
 
 
 	for (i = 0; i < maps_count; i++)
@@ -1966,7 +1968,7 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 		if (!(map->frame.first < pinfo->num && pinfo->num < map->frame.last))
 			continue;
 
-		if (willbe_offset_bits > rem_len)
+		if (willbe_offset_bits > rem_len_bits)
 			break;
 
 		psf_item = proto_tree_add_string_format(epl_tree, hf_epl_pdo, payload_tvb, 0, 0, "", "%s", map->title);
@@ -1992,24 +1994,19 @@ call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff
 			PROTO_ITEM_SET_GENERATED(ti);
 		}
 
-		if (map->info && map->info->type)
-		{
-			proto_tree_add_item(
-			pdo_tree, *map->info->type->hf,
-			tvb_new_octet_aligned(payload_tvb, map->bit_offset, map->no_of_bits),
-			0, map->no_of_bits / 8, map->info->type->encoding
-			);
-		} else { 
-			dissect_epl_payload_fallback(pdo_tree, payload_tvb, pinfo, map->bit_offset / 8, map->no_of_bits / 8, msgType); 
-		}
+		dissect_epl_payload(
+				pdo_tree,
+				tvb_new_octet_aligned(payload_tvb, map->bit_offset, map->no_of_bits),
+				pinfo, 0, map->no_of_bits / 8, map->info ? map->info->type : NULL, msgType
+		); 
 
 		off = willbe_offset_bits / 8;
 	}
 
-	/* If we don't have enough information, resport to data dissector */
+	/* If we don't have more information, resort to data dissector */
 	if (tvb_captured_length_remaining(payload_tvb, off))
 	{
-		return dissect_epl_payload_fallback(epl_tree, payload_tvb, pinfo, off, rem_len, msgType);
+		return dissect_epl_payload(epl_tree, payload_tvb, pinfo, off, rem_len, NULL, msgType);
 	}
 	return offset + len;
 }
@@ -2504,7 +2501,7 @@ dissect_eplpdu(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, gboolean udp
 			 * there's nothing to dissect! Everything is given to the heuristic,
 			 * which will dissect as data, if no heuristic dissector uses it. */
 			size = tvb_captured_length_remaining(tvb, offset);
-			offset = dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_AMNI);
+			offset = dissect_epl_payload(epl_tree, tvb, pinfo, offset, size, NULL, EPL_AMNI);
 			break;
 
 	           /* Default case can not happen as it is caught by an earlier switch
@@ -2553,42 +2550,57 @@ decode_epl_address (guchar adr)
 }
 
 static gint
-dissect_epl_payload_fallback(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, gint len, guint8 msgType)
+dissect_epl_payload(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gint offset, gint len, const struct epl_datatype *type, guint8 msgType)
 {
-	gint off = 0, rem_len = 0, pld_rem_len = 0;
-	tvbuff_t * payload_tvb = NULL;
-	heur_dtbl_entry_t *hdtbl_entry = NULL;
-	proto_item * item = NULL;
 
-	off = offset;
-
-	if (len > 0)
+	/* If a mapping uses a type of fixed width that's not equal to
+	 * the function argument's length, fallback to raw data dissector
+	 */
+	if (type && (!type->len || type->len == len))
 	{
-		rem_len = tvb_captured_length_remaining(tvb, 0);
-		payload_tvb = tvb_new_subset_length(tvb, off, len > rem_len ? rem_len : len);
-		pld_rem_len = tvb_captured_length_remaining(payload_tvb, 0);
-		if ( pld_rem_len < len )
-		{
-			item = proto_tree_add_uint(epl_tree, hf_epl_payload_real, tvb, off, pld_rem_len, pld_rem_len);
-			PROTO_ITEM_SET_GENERATED(item);
-			expert_add_info(pinfo, item, &ei_real_length_differs );
-		}
+		proto_tree_add_item(epl_tree, *type->hf, tvb, offset, len, type->encoding);
+		offset += len;
+	}
+	else
+	{
+		gint off = 0, rem_len = 0, pld_rem_len = 0;
+		tvbuff_t * payload_tvb = NULL;
+		heur_dtbl_entry_t *hdtbl_entry = NULL;
+		proto_item * item = NULL;
 
-		if ( ! dissector_try_heuristic(heur_epl_data_subdissector_list, payload_tvb, pinfo, epl_tree, &hdtbl_entry, &msgType))
+		off = offset;
+
+		if (len > 0)
 		{
-			/* We don't know the type, so let's use appropriate unsignedX */
-			gint *hf = SIZE_TO_UNSIGNED_HF(len);
-			if (hf)
+			rem_len = tvb_captured_length_remaining(tvb, 0);
+			payload_tvb = tvb_new_subset_length(tvb, off, len > rem_len ? rem_len : len);
+			pld_rem_len = tvb_captured_length_remaining(payload_tvb, 0);
+			if ( pld_rem_len < len )
 			{
-				proto_tree_add_item(epl_tree, *hf, payload_tvb, 0, len, ENC_LITTLE_ENDIAN);
-			} else {
-				call_data_dissector(payload_tvb, pinfo, epl_tree);
+				item = proto_tree_add_uint(epl_tree, hf_epl_payload_real, tvb, off, pld_rem_len, pld_rem_len);
+				PROTO_ITEM_SET_GENERATED(item);
+				expert_add_info(pinfo, item, &ei_real_length_differs );
+				if (pinfo->num == 376006)
+					printf("topkek[%u]: pld_rem_len=%u, len=%u, rem_len=%u, off=%u\n", pinfo->num, pld_rem_len, len, rem_len, off);
+			}
+
+			if ( ! dissector_try_heuristic(heur_epl_data_subdissector_list, payload_tvb, pinfo, epl_tree, &hdtbl_entry, &msgType))
+			{
+				/* We don't know the type, so let's use appropriate unsignedX */
+				gint *hf = SIZE_TO_UNSIGNED_HF(len);
+				if (hf)
+				{
+					proto_tree_add_item(epl_tree, *hf, payload_tvb, 0, len, ENC_LITTLE_ENDIAN);
+				} else {
+					call_data_dissector(payload_tvb, pinfo, epl_tree);
+				}
 			}
 		}
 
+		offset = off + len;
 	}
 
-	return off + len;
+	return offset;
 }
 
 gint
@@ -2895,15 +2907,12 @@ dissect_epl_asnd(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 
 			next_tvb = tvb_new_subset(tvb, offset, size, reported_len);
 			/* Manufacturer specific entries for ASND services */
-			if ( svid >= 0xA0 && svid < 0xFF )
-			{
-				if (! dissector_try_uint(epl_asnd_dissector_table, svid, next_tvb, pinfo,
-						( epl_tree != NULL ? epl_tree->parent : epl_tree ) ) )
-					dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_ASND );
-			} else {
-				dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_ASND );
-			}
-			break;
+			if (svid >= 0xA0 && svid < 0xFF
+			&& dissector_try_uint(epl_asnd_dissector_table, svid, next_tvb, pinfo,
+			( epl_tree != NULL ? epl_tree->parent : epl_tree )))
+					break;
+
+			dissect_epl_payload(epl_tree, tvb, pinfo, offset, size, NULL, EPL_ASND);
 	}
 
 	return offset;
@@ -3944,15 +3953,10 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
 			offset = dissect_object_mapping(convo->profiles.CN, mappings, epl_tree, tvb, pinfo->num, offset, idx, subindex);
 		}
-		else if (obj && obj->info.type)
-		{
-			proto_tree_add_item(epl_tree, *obj->info.type->hf, tvb,
-					offset, size, obj->info.type->encoding);
-			offset += size;
-		}
 		else
 		{
-			offset += dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_ASND );
+			offset = dissect_epl_payload(epl_tree, tvb, pinfo, offset, size,
+					obj ? obj->info.type : NULL, EPL_ASND);
 		}
 	}
 	else
@@ -4263,16 +4267,9 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 
 				dissect_object_mapping(convo->profiles.CN, mappings, epl_tree, tvb, pinfo->num, dataoffset, idx, subindex);
 			}
-			else if (obj && obj->info.type)
+			else /* dissect the payload */
 			{
-				proto_tree_add_item(epl_tree, *obj->info.type->hf, tvb,
-						offset, size, obj->info.type->encoding);
-				offset += size;
-			}
-			else
-			{
-				/* dissect the payload */
-				dissect_epl_payload_fallback(psf_od_tree, tvb, pinfo, dataoffset, size, EPL_ASND);
+				dissect_epl_payload(psf_od_tree, tvb, pinfo, dataoffset, size, obj ? obj->info.type : NULL, EPL_ASND);
 			}
 
 			offset += datalength;
@@ -4305,6 +4302,7 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 	struct object *obj = NULL;
 	struct subobject *subobj = NULL;
 	struct read_req *req;
+	const struct epl_datatype *type = NULL;
 
 	/* get the current frame number */
 	frame = pinfo->num;

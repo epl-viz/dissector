@@ -106,8 +106,8 @@ sort_subindices(void *key _U_, void *value, void *user_data _U_)
 static struct dataTypeMap {
 	guint16 id;
 	const char *name;
-	struct dataTypeMap_in *type;
-} dataTypeMap_in[] = {
+	struct epl_datatype *type;
+} epl_datatypes[] = {
 	{0x0001, "Boolean",        NULL},
 	{0x0002, "Integer8",       NULL},
 	{0x0003, "Integer16",      NULL},
@@ -146,9 +146,9 @@ eds_init(void)
 {
 	struct dataTypeMap *entry;
 	dataTypeMap = wmem_map_new(wmem_epan_scope(), epl_g_int16_hash, epl_g_int16_equal);
-	for (entry = dataTypeMap_in; entry->name; entry++)
+	for (entry = epl_datatypes; entry->name; entry++)
 	{
-		const struct dataTypeMap_in *type = epl_type_to_hf(entry->name);
+		const struct epl_datatype *type = epl_type_to_hf(entry->name);
 		wmem_map_insert(dataTypeMap, &entry->id, (void*)type);
 	}
 }
@@ -212,7 +212,7 @@ eds_load(struct profile *profile, const char *eds_file)
 
 		DataType = epl_g_key_file_get_uint16(gkf, *group, "DataType", NULL);
 		if (DataType)
-			tmpobj.type = (const struct dataTypeMap_in*)wmem_map_lookup(dataTypeMap, &DataType);
+			tmpobj.type = (const struct epl_datatype*)wmem_map_lookup(dataTypeMap, &DataType);
 
 		if ((name = g_key_file_get_string(gkf, *group, "ParameterName", NULL)))
 		{

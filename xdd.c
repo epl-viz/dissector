@@ -201,7 +201,7 @@ populate_profileName(xmlNodeSetPtr nodes, void *_profile)
 
 struct dataType {
 	guint16 id;
-	const struct dataTypeMap_in *ptr;
+	const struct epl_datatype *ptr;
 };
 
 static int
@@ -238,7 +238,7 @@ populate_dataTypeList(xmlNodeSetPtr nodes, void *_profile)
 					if (subnode->type == XML_ELEMENT_NODE)
 					{
 						struct dataType *type;
-						const struct dataTypeMap_in *ptr = epl_type_to_hf((char*)subnode->name);
+						const struct epl_datatype *ptr = epl_type_to_hf((char*)subnode->name);
 						if (!ptr)
 						{
 							EPL_INFO("Skipping unknown type '%s'\n", subnode->name);
