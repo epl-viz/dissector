@@ -1956,7 +1956,7 @@ convo_read_req_set(struct epl_convo *convo, guint8 SendSequenceNumber)
 
 
 static int
-call_pdo_payload_dissector(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint offset, guint len, guint8 msgType)
+dissect_epl_pdo(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, guint offset, guint len, guint8 msgType)
 {
 	wmem_array_t *mapping = msgType == EPL_PRES ? convo->TPDO : convo->RPDO;
 	tvbuff_t *payload_tvb;
@@ -2684,7 +2684,7 @@ dissect_epl_preq(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 			(EPL_PDO_RD_MASK & flags), hi_nibble(pdoversion), lo_nibble(pdoversion));
 
 	offset += 2;
-	offset += call_pdo_payload_dissector(convo, epl_tree, tvb, pinfo, offset, len, EPL_PREQ );
+	offset = dissect_epl_pdo(convo, epl_tree, tvb, pinfo, offset, len, EPL_PREQ );
 
 	return offset;
 }
@@ -2751,7 +2751,7 @@ dissect_epl_pres(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *tvb, p
 
 
 	offset += 2;
-	offset += call_pdo_payload_dissector(convo, epl_tree, tvb, pinfo, offset, len, EPL_PRES );
+	offset = dissect_epl_pdo(convo, epl_tree, tvb, pinfo, offset, len, EPL_PRES );
 
 	return offset;
 }
