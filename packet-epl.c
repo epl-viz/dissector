@@ -1915,18 +1915,32 @@ struct epl_convo {
 
 		const char *index_name;
 		struct od_entry *info;
-	} read_reqs[32]; /* We queue 32 read requests for every CN */
-	/* XXX: Way too big! Fix this and use frame data instead? */
+	} read_reqs[4];
+	/* In lieu of allocating an unknown number of read requests, we'll keep a ring
+	 * buff of the 4 most recent ones and when a response comes we add them as packet
+	 * data
+	 */
 };
 
 static struct read_req *
-convo_read_req_get(struct epl_convo *convo, guint8 SendSequenceNumber)
+convo_read_req_get(struct epl_convo *convo, packet_info *pinfo, guint8 SendSequenceNumber)
 {
 	guint i;
+	guint32 seq_p_key = (ETHERTYPE_EPL_V2 << 16) | convo->seq_send;
+	struct read_req *req = (struct read_req*)p_get_proto_data(wmem_file_scope(), pinfo, proto_epl, seq_p_key);
+
+	if (req)
+		return req;
+
 	for (i = 0; i < array_length(convo->read_reqs); i++)
 	{
 		if(convo->read_reqs[i].sendsequence == SendSequenceNumber)
-			return &convo->read_reqs[i];
+		{
+			req = wmem_new(wmem_file_scope(), struct read_req);
+			*req = convo->read_reqs[i];
+			p_add_proto_data(wmem_file_scope(), pinfo, proto_epl, seq_p_key, req);
+			return req;
+		}
 	}
 
 	return NULL;
@@ -4423,30 +4437,36 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 		size = tvb_reported_length_remaining(tvb, offset);
 
 		/* Did we register the read req? */
-		if ((req = convo_read_req_get(convo, convo->seq_send))) {
+
+		if ((req = convo_read_req_get(convo, pinfo, convo->seq_send))) {
 			proto_item *ti;
 			ti = proto_tree_add_uint_format_value(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, 0, 0, req->idx, "%04X", req->idx);
 			PROTO_ITEM_SET_GENERATED(ti);
 			if (req->info)
+			{
 				proto_item_append_text (ti, " (%s)", req->index_name);
+				type = req->info->type;
+			}
 
 			ti = proto_tree_add_uint_format_value(epl_tree, hf_epl_asnd_sdo_cmd_data_subindex, tvb, 0, 0, req->subindex, "%02X", req->subindex);
 			PROTO_ITEM_SET_GENERATED(ti);
 
 			if (req->info && req->info->name != req->index_name)
 				proto_item_append_text (ti, " (%s)", req->info->name);
+
 		}
-		offset = dissect_epl_payload_fallback(epl_tree, tvb, pinfo, offset, size, EPL_ASND );
+
+		offset = dissect_epl_payload(epl_tree, tvb, pinfo, offset, size, type, EPL_ASND);
 	}
 
 	return offset;
 }
 
 /* User Access Table Checkers */
-static gboolean epl_profile_uat_fld_fileopen_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
-static gboolean epl_uat_fld_cn_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
-static gboolean epl_uat_fld_uint16dec_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
-static gboolean epl_uat_fld_uint32hex_check_cb(void *r _U_, const char *p, guint len _U_, const void *u1 _U_, const void *u2 _U_, char **err);
+static gboolean epl_profile_uat_fld_fileopen_check_cb(void *, const char *, unsigned, const void *, const void *, char **);
+static gboolean epl_uat_fld_cn_check_cb(void *, const char *, unsigned, const void *, const void *, char **);
+static gboolean epl_uat_fld_uint16dec_check_cb(void *, const char *, unsigned, const void *, const void *, char **);
+static gboolean epl_uat_fld_uint32hex_check_cb(void *, const char *, unsigned, const void *, const void *, char **);
 
 /* DeviceType:Path User Access Table */
 struct device_profile_uat_assoc {
