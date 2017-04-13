@@ -1899,9 +1899,8 @@ struct epl_convo {
 
 	wmem_array_t *TPDO; /* CN->MN */
 	wmem_array_t *RPDO; /* MN->CN */
-	struct {
-		struct profile *CN, *MN;
-	} profiles;
+
+	struct profile *profile;
 
 	guint32 last_frame;
 	guint8 next_read_req;
@@ -2068,8 +2067,7 @@ epl_get_convo(packet_info *pinfo, enum convo_opts opts)
 		convo->TPDO = wmem_array_new(pdo_mapping_scope, sizeof (struct object_mapping));
 		convo->RPDO = wmem_array_new(pdo_mapping_scope, sizeof (struct object_mapping));
 
-		convo->profiles.MN = NULL;
-		convo->profiles.CN = (struct profile*)wmem_map_lookup(epl_profiles_by_nodeid, &convo->CN);
+		convo->profile = (struct profile*)wmem_map_lookup(epl_profiles_by_nodeid, &convo->CN);
 		convo->seq_send = 0x00;
 		conversation_add_proto_data(epan_convo, proto_epl, (void *)convo);
 	}
@@ -2096,7 +2094,7 @@ epl_update_convo_cn_profile(struct epl_convo *convo)
 		} while ((iter = iter->next));
 
 
-		convo->profiles.CN = candidate;
+		convo->profile = candidate;
 		/* TODO: leaks memory when profile is changed? */
 		if (!wmem_array_get_count(convo->RPDO))
 		{
@@ -3178,15 +3176,15 @@ dissect_epl_asnd_ires(struct epl_convo *convo, proto_tree *epl_tree, tvbuff_t *t
 								convo->DeviceType, val_to_str_const(convo->DeviceType, epl_device_profiles, "Unknown Profile"), additional);
 
 	ti = proto_tree_add_item(epl_tree, hf_epl_asnd_identresponse_profile, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-	if (!convo->profiles.CN || !convo->profiles.CN->nodeid)
+	if (!convo->profile || !convo->profile->nodeid)
 		epl_update_convo_cn_profile(convo);
-	if (convo->profiles.CN)
+	if (convo->profile)
 	{
-		if (convo->profiles.CN->name)
-			proto_item_append_text(ti, " (%s)", convo->profiles.CN->name);
-		if (convo->profiles.CN->path)
+		if (convo->profile->name)
+			proto_item_append_text(ti, " (%s)", convo->profile->name);
+		if (convo->profile->path)
 		{
-			ti = proto_tree_add_string(epl_tree, hf_epl_asnd_identresponse_profile_path, tvb, offset, 2, convo->profiles.CN->path);
+			ti = proto_tree_add_string(epl_tree, hf_epl_asnd_identresponse_profile_path, tvb, offset, 2, convo->profile->path);
 			PROTO_ITEM_SET_GENERATED(ti);
 		}
 	}
@@ -3745,7 +3743,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 			/* add index item */
 			psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, offset, 2, ENC_LITTLE_ENDIAN);
 			/* look up index in registered profile */
-			obj = object_lookup(convo->profiles.CN, idx);
+			obj = object_lookup(convo->profile, idx);
 			if (!obj)
 			{
 				/* value to string */
@@ -3951,7 +3949,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 		if((idx == EPL_SOD_PDO_TX_MAPP && subindex > 0x00) || (idx == EPL_SOD_PDO_RX_MAPP && subindex > 0x00))
 		{
 			wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
-			offset = dissect_object_mapping(convo->profiles.CN, mappings, epl_tree, tvb, pinfo->num, offset, idx, subindex);
+			offset = dissect_object_mapping(convo->profile, mappings, epl_tree, tvb, pinfo->num, offset, idx, subindex);
 		}
 		else
 		{
@@ -4139,7 +4137,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 				/* add index item */
 				psf_item = proto_tree_add_item(psf_od_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, offset+4, 2, ENC_LITTLE_ENDIAN);
 				/* Check profile for name */
-				obj = object_lookup(convo->profiles.CN, idx);
+				obj = object_lookup(convo->profile, idx);
 				if (!obj)
 				{
 					/* value to string */
@@ -4265,7 +4263,7 @@ dissect_epl_sdo_command_write_multiple_by_index(struct epl_convo *convo, proto_t
 			{
 				wmem_array_t *mappings = idx == EPL_SOD_PDO_TX_MAPP ? convo->TPDO : convo->RPDO;
 
-				dissect_object_mapping(convo->profiles.CN, mappings, epl_tree, tvb, pinfo->num, dataoffset, idx, subindex);
+				dissect_object_mapping(convo->profile, mappings, epl_tree, tvb, pinfo->num, dataoffset, idx, subindex);
 			}
 			else /* dissect the payload */
 			{
@@ -4312,7 +4310,7 @@ dissect_epl_sdo_command_read_by_index(struct epl_convo *convo, proto_tree *epl_t
 		const char *name;
 		idx = tvb_get_letohs(tvb, offset);
 		psf_item = proto_tree_add_item(epl_tree, hf_epl_asnd_sdo_cmd_data_index, tvb, offset, 2, ENC_LITTLE_ENDIAN);
-		obj = object_lookup(convo->profiles.CN, idx);
+		obj = object_lookup(convo->profile, idx);
 
 		name = obj ? obj->info.name
 		           : val_to_str_ext_const(((guint32)(idx<<16)), &sod_index_names, "User Defined");
