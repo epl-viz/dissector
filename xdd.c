@@ -282,7 +282,7 @@ parse_obj_tag(xmlNode *cur, struct od_entry *out, struct profile *profile) {
 				g_strlcpy(out->name, val, sizeof out->name);
 
 			} else if (g_str_equal("objectType", key)) {
-				out->kind = epl_strtou16(val, &endptr, 16);
+				out->type_class = epl_strtou16(val, &endptr, 16);
 
 			} else if (g_str_equal("dataType", key)) {
 				guint16 id = epl_strtou16(val, &endptr, 16);
@@ -334,7 +334,7 @@ populate_objectList(xmlNodeSetPtr nodes, void *_profile)
 			struct object *obj = profile_object_add(profile, tmpobj.idx);
 			obj->info = tmpobj;
 
-			if (tmpobj.kind == 8 || tmpobj.kind == 9)
+			if (tmpobj.type_class == 8 || tmpobj.type_class == 9)
 			{
 				xmlNode *subcur;
 				struct subobject subobj = {0};

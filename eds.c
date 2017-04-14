@@ -207,8 +207,9 @@ eds_load(struct profile *profile, const char *eds_file)
 		}
 		else continue;
 		
-		tmpobj.kind = epl_g_key_file_get_uint16(gkf, *group, "ObjectType", NULL);
-		if (!tmpobj.kind) continue; 
+		tmpobj.type_class = epl_g_key_file_get_uint16(gkf, *group, "ObjectType", NULL);
+		if (!tmpobj.type_class)
+			continue; 
 
 		DataType = epl_g_key_file_get_uint16(gkf, *group, "DataType", NULL);
 		if (DataType)

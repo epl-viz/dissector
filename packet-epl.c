@@ -2152,7 +2152,7 @@ subobject_equal(gconstpointer _a, gconstpointer _b)
 	const struct od_entry *a = &((const struct subobject*)_a)->info;
 	const struct od_entry *b = &((const struct subobject*)_b)->info;
 
-	return a->kind == b->kind
+	return a->type_class == b->type_class
 	    && a->type == b->type
 	    && g_str_equal(a->name, b->name);
 }
@@ -3799,7 +3799,7 @@ dissect_epl_sdo_command_write_by_index(struct epl_convo *convo, proto_tree *epl_
 				const char *name = obj->info.name;
 				proto_item_append_text(psf_item, " (%s)", name);
 				col_append_fstr(pinfo->cinfo, COL_INFO, " (%s", name);
-				nosub = obj->info.kind == OD_ENTRY_NO_SUBINDICES;
+				nosub = obj->info.type_class == OD_ENTRY_NO_SUBINDICES;
 			}
 			else if (sod_index == error)
 			{
@@ -4018,7 +4018,7 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	/* look up index in registered profiles */
 	if ((mapping_obj = object_lookup(profile, map.pdo.idx)))
 	{
-		if (!map.pdo.subindex && mapping_obj->info.kind == OD_ENTRY_NO_SUBINDICES)
+		if (!map.pdo.subindex && mapping_obj->info.type_class == OD_ENTRY_NO_SUBINDICES)
 			nosub = TRUE;
 	
 		map.info = &mapping_obj->info;
