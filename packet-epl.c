@@ -2593,8 +2593,6 @@ dissect_epl_payload(proto_tree *epl_tree, tvbuff_t *tvb, packet_info *pinfo, gin
 				item = proto_tree_add_uint(epl_tree, hf_epl_payload_real, tvb, off, pld_rem_len, pld_rem_len);
 				PROTO_ITEM_SET_GENERATED(item);
 				expert_add_info(pinfo, item, &ei_real_length_differs );
-				if (pinfo->num == 376006)
-					printf("topkek[%u]: pld_rem_len=%u, len=%u, rem_len=%u, off=%u\n", pinfo->num, pld_rem_len, len, rem_len, off);
 			}
 
 			if ( ! dissector_try_heuristic(heur_epl_data_subdissector_list, payload_tvb, pinfo, epl_tree, &hdtbl_entry, &msgType))
@@ -5893,7 +5891,6 @@ nodeid_profile_parse_uat(void)
 
 	for (i = 0; i < nnodeid_profile_uat; i++)
 	{
-		char *err;
 		struct nodeid_profile_uat_assoc *uat = &(nodeid_profile_list_uats[i]);
 
 		profile = wmem_map_lookup(
@@ -6000,11 +5997,9 @@ epl_uat_fld_cn_check_cb(void *record _U_, const char *str, guint len _U_, const 
 	/* No octals */
 	unsigned long val = strtoul(str, &endptr, g_str_has_prefix(str, "0x") ? 16 : 10);
 	if (endptr == str + len && EPL_IS_CN_NODEID(val)) {
-		printf("IS TRUE NODE ID\n");
 		return TRUE;
 	}
 	if (sscanf(str, "%*02x%*c%*02x%*c%*02x%*c%*02x%*c%*02x%*c%02x", &c) > 0) {
-		printf("IS TRUE MAC\n");
 		return TRUE;
 	}
 
@@ -6025,7 +6020,6 @@ nodeid_profile_list_uats_nodeid_set_cb(void *_rec, const char *str, unsigned len
 	{
 		rec->node.id = address[0];
 		rec->is_nodeid = TRUE;
-		printf("ID: %d\n", address[0]);
 	}
 	else
 	{
