@@ -26,6 +26,7 @@
 #define WIRESHARK_PACKET_EPL_H_
 
 #include <glib.h>
+#include <epan/address.h>
 #include <epan/wmem/wmem.h>
 #include "wmem_iarray.h"
 
@@ -43,6 +44,8 @@ const struct epl_datatype *epl_type_to_hf(const char *name);
 struct profile {
 	guint16 id;
 	guint8 nodeid;
+	address node_addr;
+
 	guint32 VendorId;
 	guint32 ProductCode;
 	
