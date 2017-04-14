@@ -29,6 +29,6 @@ struct _epl_wmem_iarray {
 	wmem_allocator_t *scope;
 	GArray *arr;
 	guint cb_id;
-    guint8 is_sorted :1;
+	guint8 is_sorted :1;
 };
 #endif

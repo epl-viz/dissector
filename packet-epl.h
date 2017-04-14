@@ -66,8 +66,17 @@ struct profile {
 #define OD_ENTRY_NO_SUBINDICES 7
 struct od_entry {
 	guint16 idx;
-	guint8 kind; /* object type, is it aggregate or plain and so, FIXME needs better name */
+	/* This is called the ObjectType in the standard,
+	 * but this is too easy to be mistaken with the
+	 * DataType.
+	 * ObjectType specifies whether it's a scalar or
+	 * an aggregate
+	 */
+	guint8 type_class;
 	char name[64];
+	/* Called DataType by the standard,
+	 * Can be e.g. Unsigned32
+	 */
 	const struct epl_datatype *type;
 	guint64 value;
 };

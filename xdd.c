@@ -61,11 +61,10 @@ xdd_free(void)
 	xmlCleanupParser();
 }
 
-/* XXX: do this in build system instead? */
 #if !defined(LIBXML_XPATH_ENABLED) \
 ||  !defined(LIBXML_SAX1_ENABLED)  \
 ||  !defined(LIBXML_TREE_ENABLED)
-#error "libxml needs XPATH, SAX1 and TREE support compiled in!"
+#error "packet-epl.c needs XPATH, SAX1 and TREE support compiled in!"
 #endif
 
 typedef int xpath_handler(xmlNodeSetPtr, void*);

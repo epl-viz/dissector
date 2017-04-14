@@ -1753,7 +1753,6 @@ add_object_mapping(wmem_array_t *arr, struct object_mapping *mapping)
 	struct object_mapping *old = get_object_mappings(arr, &len);
 	for (i = 0; i < len; i++)
 	{
-		/* XXX Test this more */
 		if (object_mapping_eq(&old[i], mapping))
 			return len;
 
@@ -2118,7 +2117,7 @@ epl_update_convo_cn_profile(struct epl_convo *convo)
 
 
 		convo->profile = candidate;
-		/* TODO: leaks memory when profile is changed? */
+
 		if (!wmem_array_get_count(convo->RPDO))
 		{
 			wmem_array_append(convo->RPDO,
@@ -4046,8 +4045,7 @@ dissect_object_mapping(struct profile *profile, wmem_array_t *mappings, proto_tr
 	offset += 2;
 
 
-	/* TODO: Better representation?
-	 * maybe Digital.Output_00h_AU8.DigitalOutput: 128 (0x80) ? */
+	/* TODO One could think of a better string here? */
 	if (nosub)
 		map.title = g_strdup_printf("PDO - %04X", map.pdo.idx);
 	else
@@ -4488,9 +4486,9 @@ static uat_t *device_profile_uat = NULL;
 static struct device_profile_uat_assoc *device_profile_list_uats = NULL;
 static guint ndevice_profile_uat = 0;
 
-static void *device_profile_uat_copy_cb(void *dst_, const void *src_, size_t len _U_);
-static void device_profile_uat_free_cb(void *r);
-static gboolean device_profile_uat_update_record(void *r, char **err);
+static void *device_profile_uat_copy_cb(void *, const void *, size_t);
+static void device_profile_uat_free_cb(void *);
+static gboolean device_profile_uat_update_record(void *, char **);
 static void device_profile_parse_uat(void);
 
 UAT_DEC_CB_DEF(device_profile_list_uats, DeviceType, struct device_profile_uat_assoc)
