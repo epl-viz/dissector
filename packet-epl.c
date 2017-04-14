@@ -5817,31 +5817,33 @@ device_profile_parse_uat(void)
 	{
 		struct device_profile_uat_assoc *uat = &(device_profile_list_uats[i]);
 
-		profile = profile_load(wmem_epan_scope(), uat->path);
+		profile = wmem_map_lookup(
+			epl_profiles_by_device,
+			&uat->DeviceType
+		);
 
-		if (profile)
+		if (!profile)
+			profile = profile_load(wmem_epan_scope(), uat->path);
+
+		if (!profile)
+			continue;
+
+		struct profile *profile_head;
+		if ((profile_head = wmem_map_lookup(epl_profiles_by_device, &profile->id)))
 		{
-			struct profile *profile_head;
-			if ((profile_head = wmem_map_lookup(epl_profiles_by_device, &profile->id)))
-			{
-				wmem_map_remove(epl_profiles_by_device, &profile_head->id);
-				profile->next = profile_head;
-			}
-
-			profile->id = uat->DeviceType;
-			profile->data = &profile->id;
-			profile->VendorId = uat->VendorId;
-			profile->ProductCode = uat->ProductCode;
-
-			wmem_map_insert(epl_profiles_by_device, &profile->id, profile);
-			profile->parent_map = epl_profiles_by_device;
-
-			EPL_INFO("Loading %s\n", profile->path);
+			wmem_map_remove(epl_profiles_by_device, &profile_head->id);
+			profile->next = profile_head;
 		}
-		else
-		{
-			report_failure("Profile '%s' couldn't be parsed.", uat->path);
-		}
+
+		profile->id = uat->DeviceType;
+		profile->data = &profile->id;
+		profile->VendorId = uat->VendorId;
+		profile->ProductCode = uat->ProductCode;
+
+		wmem_map_insert(epl_profiles_by_device, &profile->id, profile);
+		profile->parent_map = epl_profiles_by_device;
+
+		EPL_INFO("Loading %s\n", profile->path);
 	}
 }
 
@@ -5899,45 +5901,29 @@ nodeid_profile_parse_uat(void)
 		);
 
 		if (!profile)
-		{
-
-			/* XXX Silently skipping might not be the best course of action */
-			/* XXX Shouldn't the UAT implementation be doing that? */
-
-			if (!epl_uat_fld_cn_check_cb(uat, uat->id_str, strlen(uat->id_str), NULL, NULL, &err))
-			{
-				report_failure("This shouldn't happen");
-				continue;
-			}
-
 			profile = profile_load(wmem_epan_scope(), uat->path);
-		}
 
-		if (profile)
+		if(!profile)
+			continue;
+
+		if (uat->is_nodeid)
 		{
-			if (uat->is_nodeid)
-			{
-				profile->nodeid = uat->node.id;
-				profile->data = &profile->nodeid;
+			profile->nodeid = uat->node.id;
+			profile->data = &profile->nodeid;
 
-				wmem_map_insert(epl_profiles_by_nodeid, &profile->nodeid, profile);
-				profile->parent_map = epl_profiles_by_nodeid;
+			wmem_map_insert(epl_profiles_by_nodeid, &profile->nodeid, profile);
+			profile->parent_map = epl_profiles_by_nodeid;
 
-			}
-			else
-			{
-				copy_address_wmem(profile->scope, &profile->node_addr, &uat->node.address);
-				profile->data = &profile->node_addr;
-
-				wmem_map_insert(epl_profiles_by_address, &profile->node_addr, profile);
-				profile->parent_map = epl_profiles_by_address;
-			}
-			EPL_INFO("Loading %s\n", profile->path);
 		}
 		else
 		{
-			report_failure("Profile '%s' couldn't be parsed.", uat->path);
+			copy_address_wmem(profile->scope, &profile->node_addr, &uat->node.address);
+			profile->data = &profile->node_addr;
+
+			wmem_map_insert(epl_profiles_by_address, &profile->node_addr, profile);
+			profile->parent_map = epl_profiles_by_address;
 		}
+		EPL_INFO("Loading %s\n", profile->path);
 	}
 }
 
