@@ -1,3 +1,13 @@
+# This is now part of Wireshark 2.4.0
+
+Changes to the original EPL-Dissector done here have been merged into Wireshark 2.4.0 released on 2017-07-19.
+This repository is out of date and is only kept for historical (i.e. git-log) purposes. Base your work off `wireshark/epan/dissectors/packet-epl.c` instead.
+
+See https://code.wireshark.org/review/#/c/21112/ for the code review and subsequent patches to the code here.
+
+----
+
+
 ## EPL-Dissector with XDD support plugin for Wireshark
 
 Parses XDD/EDS files and uses extracted information to correctly label SDOs and PDOs. Depends on libxml2. Tested working with Wireshark v2.2.4.
